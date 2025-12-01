@@ -32,6 +32,7 @@ from openagents.config.globals import (
     SYSTEM_EVENT_VERIFY_PASSWORD,
     SYSTEM_EVENT_KICK_AGENT,
     SYSTEM_EVENT_UPDATE_NETWORK_PROFILE,
+    SYSTEM_EVENT_RETRIEVE_EVENT_LOG,
     SYSTEM_NOTIFICATION_AGENT_KICKED,
 )
 from openagents.models.event import Event
@@ -80,6 +81,7 @@ class SystemCommandProcessor:
             SYSTEM_EVENT_VERIFY_PASSWORD: self.handle_verify_password,
             SYSTEM_EVENT_KICK_AGENT: self.handle_kick_agent,
             SYSTEM_EVENT_UPDATE_NETWORK_PROFILE: self.handle_update_network_profile,
+            SYSTEM_EVENT_RETRIEVE_EVENT_LOG: self.handle_retrieve_event_log,
         }
 
     async def process_command(self, system_event: Event) -> Optional[EventResponse]:
@@ -1240,4 +1242,152 @@ class SystemCommandProcessor:
                     "type": "system_response",
                     "command": "update_network_profile",
                 }
+            )
+
+    async def handle_retrieve_event_log(self, event: Event) -> EventResponse:
+        """处理 retrieve_event_log 命令 (仅管理员)
+        
+        检索事件日志，支持过滤和分页。
+        
+        Args:
+            event: 包含查询参数的事件
+                - since_timestamp: 起始时间戳（可选）
+                - event_name_pattern: 事件名称模式（可选，支持通配符）
+                - source_id: 源 ID 过滤（可选）
+                - destination_id: 目标 ID 过滤（可选）
+                - limit: 返回记录数限制（默认100，最大500）
+                - offset: 分页偏移量（默认0）
+        
+        Returns:
+            EventResponse: 包含事件日志列表
+        """
+        try:
+            # 检查权限：仅管理员可访问
+            source_id = event.source_id
+            if not source_id:
+                return EventResponse(
+                    success=False,
+                    message="Source agent ID is required",
+                )
+            
+            # 获取 agent 所属的 group
+            agent_group = self.network.topology.agent_group_membership.get(source_id)
+            if agent_group != "admin":
+                return EventResponse(
+                    success=False,
+                    message="Permission denied: Only admin group members can retrieve event logs",
+                )
+            
+            # 获取查询参数
+            payload = event.payload or {}
+            since_timestamp = payload.get("since_timestamp")
+            event_name_pattern = payload.get("event_name_pattern")
+            filter_source_id = payload.get("source_id")
+            filter_destination_id = payload.get("destination_id")
+            limit = min(int(payload.get("limit", 100)), 500)  # 最大500
+            offset = int(payload.get("offset", 0))
+            
+            # 获取事件日志写入器
+            if not hasattr(self.network, 'event_log_writer') or not self.network.event_log_writer:
+                return EventResponse(
+                    success=False,
+                    message="Event logging is not enabled on this network",
+                )
+            
+            event_log_writer = self.network.event_log_writer
+            
+            # 获取所有日志文件（从最新到最旧）
+            log_files = event_log_writer.get_all_log_files()
+            
+            if not log_files:
+                return EventResponse(
+                    success=True,
+                    message="No event logs found",
+                    data={
+                        "events": [],
+                        "total_count": 0,
+                        "has_more": False,
+                    }
+                )
+            
+            # 扫描日志文件并收集事件
+            import json
+            import re
+            
+            all_events = []
+            
+            for log_file in log_files:
+                try:
+                    with open(log_file, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            
+                            try:
+                                log_entry = json.loads(line)
+                                
+                                # 应用过滤器
+                                # 时间戳过滤
+                                if since_timestamp and log_entry.get("timestamp", 0) < since_timestamp:
+                                    continue
+                                
+                                # 事件名称模式过滤
+                                if event_name_pattern:
+                                    entry_event_name = log_entry.get("event_name", "")
+                                    # 支持通配符 *
+                                    if event_name_pattern.endswith("*"):
+                                        prefix = event_name_pattern[:-1]
+                                        if not entry_event_name.startswith(prefix):
+                                            continue
+                                    elif event_name_pattern != entry_event_name:
+                                        continue
+                                
+                                # 源 ID 过滤
+                                if filter_source_id and log_entry.get("source_id") != filter_source_id:
+                                    continue
+                                
+                                # 目标 ID 过滤
+                                if filter_destination_id and log_entry.get("destination_id") != filter_destination_id:
+                                    continue
+                                
+                                # 通过所有过滤器，添加到结果
+                                all_events.append(log_entry)
+                                
+                            except json.JSONDecodeError:
+                                self.logger.warning(f"Failed to parse log line: {line[:100]}")
+                                continue
+                                
+                except Exception as e:
+                    self.logger.error(f"Error reading log file {log_file}: {e}")
+                    continue
+            
+            # 按时间戳排序（从新到旧）
+            all_events.sort(key=lambda e: e.get("timestamp", 0), reverse=True)
+            
+            # 应用分页
+            total_count = len(all_events)
+            start_idx = offset
+            end_idx = offset + limit
+            paginated_events = all_events[start_idx:end_idx]
+            has_more = end_idx < total_count
+            
+            return EventResponse(
+                success=True,
+                message=f"Retrieved {len(paginated_events)} events",
+                data={
+                    "events": paginated_events,
+                    "total_count": total_count,
+                    "has_more": has_more,
+                    "returned_count": len(paginated_events),
+                }
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error retrieving event log: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            return EventResponse(
+                success=False,
+                message=f"Internal error while retrieving event log: {str(e)}",
             )

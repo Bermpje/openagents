@@ -113,6 +113,18 @@ class AgentNetwork:
         # Event gateway
         self.event_gateway = EventGateway(self)
 
+        # Event logging
+        self.event_log_writer = None
+        if self.workspace_manager:
+            from openagents.core.event_logging import EventLogWriter
+            self.event_log_writer = EventLogWriter(
+                logs_path=self.workspace_manager.logs_path,
+                max_file_size_mb=100,
+                retention_days=7,
+            )
+            # 将日志写入器传递给 event gateway
+            self.event_gateway.event_log_writer = self.event_log_writer
+
         # Set network context for MCP transport (must be after mods and event_gateway are initialized)
         self.topology.network_context = self._create_network_context()
 
@@ -379,6 +391,11 @@ class AgentNetwork:
             # Re-register message handlers after topology initialization
             self._register_internal_handlers()
 
+            # 启动事件日志写入器
+            if self.event_log_writer:
+                await self.event_log_writer.start()
+                logger.info("Event logging enabled")
+
             self.is_running = True
             self.start_time = time.time()
 
@@ -396,6 +413,11 @@ class AgentNetwork:
         """
         try:
             self.is_running = False
+
+            # 停止事件日志写入器
+            if self.event_log_writer:
+                await self.event_log_writer.stop()
+                logger.info("Event logging stopped")
 
             # Shutdown topology
             await self.topology.shutdown()
