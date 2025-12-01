@@ -1,0 +1,37 @@
+# 事件日志系统演示网络配置
+# 
+# 此网络演示了 OpenAgents 的事件日志记录功能
+
+network:
+  name: "Event Logging Demo"
+  mode: "centralized"
+  host: "0.0.0.0"
+  port: 8700
+
+  # 配置 agent 组
+  agent_groups:
+    admin:
+      description: "管理员组，可以访问事件日志"
+      password: "admin_password_123"
+      metadata:
+        agents: []
+    
+    guest:
+      description: "访客组，无法访问事件日志"
+      password: ""
+      metadata:
+        agents: []
+
+  # 默认组
+  default_agent_group: "guest"
+
+  # 传输协议
+  transports:
+    - type: "http"
+      config:
+        host: "0.0.0.0"
+        port: 8700
+
+  # 网络 mods
+  mods: []
+
