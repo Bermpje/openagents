@@ -1,0 +1,38 @@
+# 事件日志系统演示网络配置（带权限控制）
+
+network:
+  name: "Event Logging Demo (With Auth)"
+  mode: "centralized"
+  host: "0.0.0.0"
+  port: 8700
+
+  # 配置 agent 组（带权限）
+  agent_groups:
+    admin:
+      description: "管理员组，可以访问事件日志"
+      # 密码: "admin123"
+      password_hash: "79dff3f691f7e6a1301bae5e62a094d77104680ba49624371f1353a138a1a683"
+      metadata:
+        agents: []
+    
+    guest:
+      description: "访客组，无法访问事件日志"
+      # 密码: "guest123"
+      password_hash: "e5a978ae4d92fe4786d6ecdb811e0723c5f585d782fbd9439be6510f06adca0e"
+      metadata:
+        agents: []
+
+  # 默认组
+  default_agent_group: "guest"
+  requires_password: false  # 不强制要求密码（可以自动进入 guest）
+
+  # 传输协议
+  transports:
+    - type: "http"
+      config:
+        host: "0.0.0.0"
+        port: 8700
+
+  # 网络 mods
+  mods: []
+

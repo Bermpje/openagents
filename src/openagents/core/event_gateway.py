@@ -103,9 +103,6 @@ class EventGateway:
         self.agent_event_queues: Dict[str, asyncio.Queue] = {}
         self.system_command_processor = SystemCommandProcessor(network)
         self.mod_event_processor = ModEventProcessor(network.mods)
-        
-        # 事件日志写入器（延迟初始化）
-        self.event_log_writer: Optional[Any] = None
 
     async def process_system_command(self, event: Event) -> Optional[EventResponse]:
         """
@@ -158,9 +155,6 @@ class EventGateway:
         Returns:
             EventResponse: The event response
         """
-        # 记录 inbound 事件
-        await self._log_inbound_event(event)
-        
         # Override the timestamp to the current time
         event.timestamp = int(time.time())
         # Process the event through the pipeline
@@ -275,9 +269,6 @@ class EventGateway:
         # Deliver the event to the agent's queue
         await self.agent_event_queues[agent_id].put(event)
         logger.debug(f"Delivered event {event.event_name} to agent {agent_id}")
-        
-        # 记录 outbound 事件
-        await self._log_outbound_event(event, agent_id)
 
     async def poll_events(self, agent_id: str) -> List[Event]:
         """
@@ -487,41 +478,3 @@ class EventGateway:
         for channel in self.channel_members:
             if agent_id in self.channel_members[channel]:
                 self.channel_members[channel].remove(agent_id)
-
-    async def _log_inbound_event(self, event: Event):
-        """记录 inbound 事件到日志系统
-        
-        Args:
-            event: 入站事件
-        """
-        if not self.event_log_writer:
-            return
-        
-        try:
-            from openagents.core.event_logging import EventLogEntry
-            entry = EventLogEntry.from_event(event, direction="inbound")
-            await self.event_log_writer.log_event(entry)
-        except Exception as e:
-            # 不应该因为日志错误而影响事件处理
-            logger.debug(f"Failed to log inbound event: {e}")
-
-    async def _log_outbound_event(self, event: Event, destination_agent_id: str):
-        """记录 outbound 事件到日志系统
-        
-        Args:
-            event: 出站事件
-            destination_agent_id: 目标 agent ID
-        """
-        if not self.event_log_writer:
-            return
-        
-        try:
-            from openagents.core.event_logging import EventLogEntry
-            # 创建一个副本以记录真实的目标
-            entry = EventLogEntry.from_event(event, direction="outbound")
-            # 覆盖 destination_id 为实际投递的 agent
-            entry.destination_id = destination_agent_id
-            await self.event_log_writer.log_event(entry)
-        except Exception as e:
-            # 不应该因为日志错误而影响事件处理
-            logger.debug(f"Failed to log outbound event: {e}")

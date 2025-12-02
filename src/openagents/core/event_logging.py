@@ -1,10 +1,10 @@
 """
-事件日志系统
+Event Logging System
 
-该模块提供事件日志记录功能，包括：
-- EventLogEntry: 事件日志数据结构
-- EventLogWriter: 后台异步写入任务
-- 日志文件切割和清理功能
+This module provides event logging functionality, including:
+- EventLogEntry: event log data structure
+- EventLogWriter: background async writer task
+- Log file rotation and cleanup
 """
 
 import asyncio
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class EventLogEntry:
-    """事件日志条目数据结构"""
+    """Event log entry data structure"""
     timestamp: float  # Unix timestamp with milliseconds
     direction: str  # "inbound" or "outbound"
     event_name: str
@@ -37,11 +37,11 @@ class EventLogEntry:
 
     @classmethod
     def from_event(cls, event: Event, direction: str) -> "EventLogEntry":
-        """从 Event 对象创建日志条目
+        """Create a log entry from an Event object
         
         Args:
-            event: 事件对象
-            direction: "inbound" 或 "outbound"
+            event: Event object
+            direction: "inbound" or "outbound"
         """
         return cls(
             timestamp=time.time(),
@@ -56,7 +56,7 @@ class EventLogEntry:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典用于序列化"""
+        """Convert to dictionary for serialization"""
         return {
             "timestamp": self.timestamp,
             "direction": self.direction,
@@ -70,15 +70,16 @@ class EventLogEntry:
         }
 
     def to_json(self) -> str:
-        """转换为 JSON 字符串"""
+        """Convert to JSON string"""
         return json.dumps(self.to_dict())
 
 
 class EventLogWriter:
-    """事件日志写入器
-    
-    独立的异步任务，从队列中消费事件并写入 JSONL 文件。
-    支持日志切割和自动清理。
+    """
+    Event log writer.
+
+    A standalone async task that consumes log entries from a queue and writes them
+    into a JSONL file. Supports log rotation and automatic cleanup.
     """
 
     def __init__(
@@ -87,12 +88,12 @@ class EventLogWriter:
         max_file_size_mb: int = 100,
         retention_days: int = 7,
     ):
-        """初始化事件日志写入器
+        """Initialize event log writer
         
         Args:
-            logs_path: 日志目录路径
-            max_file_size_mb: 单个日志文件的最大大小（MB）
-            retention_days: 日志文件保留天数
+            logs_path: Directory where log files are stored
+            max_file_size_mb: Maximum size of a single log file (MB)
+            retention_days: Number of days to retain log files
         """
         self.logs_path = Path(logs_path)
         self.logs_path.mkdir(parents=True, exist_ok=True)
@@ -113,7 +114,7 @@ class EventLogWriter:
         )
 
     async def start(self):
-        """启动日志写入器"""
+        """Start the event log writer"""
         if self.running:
             logger.warning("EventLogWriter is already running")
             return
@@ -123,16 +124,16 @@ class EventLogWriter:
         logger.info("EventLogWriter started")
 
     async def stop(self):
-        """停止日志写入器"""
+        """Stop the event log writer"""
         if not self.running:
             return
         
         self.running = False
         
-        # 等待队列清空
+        # Wait for queue to be fully consumed
         await self.queue.join()
         
-        # 取消任务
+        # Cancel background task
         if self.task:
             self.task.cancel()
             try:
@@ -140,7 +141,7 @@ class EventLogWriter:
             except asyncio.CancelledError:
                 pass
         
-        # 关闭文件句柄
+        # Close file handle
         if self.current_file_handle:
             self.current_file_handle.close()
             self.current_file_handle = None
@@ -148,33 +149,31 @@ class EventLogWriter:
         logger.info("EventLogWriter stopped")
 
     async def log_event(self, entry: EventLogEntry):
-        """将事件条目添加到队列
+        """Add a log entry to the queue
         
         Args:
-            entry: 事件日志条目
+            entry: Event log entry
         """
         try:
-            # 使用 put_nowait 避免阻塞
             self.queue.put_nowait(entry)
         except asyncio.QueueFull:
             logger.warning("Event log queue is full, dropping event")
 
     async def _write_loop(self):
-        """后台写入循环"""
+        """Background write loop"""
         try:
             while self.running:
                 try:
-                    # 从队列获取事件，超时 1 秒以便定期检查状态
+                    # Retrieve event from queue, timeout every 1 second
                     entry = await asyncio.wait_for(self.queue.get(), timeout=1.0)
                     
-                    # 写入事件
+                    # Write entry
                     await self._write_event(entry)
                     
-                    # 标记任务完成
                     self.queue.task_done()
                     
                 except asyncio.TimeoutError:
-                    # 超时是正常的，继续循环
+                    # Normal condition for periodic checks
                     continue
                     
         except asyncio.CancelledError:
@@ -183,20 +182,15 @@ class EventLogWriter:
             logger.error(f"Error in EventLogWriter write loop: {e}", exc_info=True)
 
     async def _write_event(self, entry: EventLogEntry):
-        """写入单个事件到日志文件
-        
-        Args:
-            entry: 事件日志条目
-        """
+        """Write a single event into the log file"""
         try:
-            # 检查是否需要切割日志文件
+            # Check file rotation
             await self._check_rotation()
             
-            # 确保有打开的文件句柄
+            # Ensure file handle is open
             if not self.current_file_handle:
                 await self._open_new_log_file()
             
-            # 写入 JSONL 行
             json_line = entry.to_json() + "\n"
             self.current_file_handle.write(json_line)
             self.current_file_handle.flush()
@@ -205,18 +199,18 @@ class EventLogWriter:
             logger.error(f"Error writing event to log: {e}", exc_info=True)
 
     async def _check_rotation(self):
-        """检查是否需要切割日志文件"""
+        """Check whether log rotation is needed"""
         should_rotate = False
         
-        # 检查日期变化
+        # By date
         if self.current_log_file:
             current_date = datetime.now().strftime("%Y-%m-%d")
             file_date = self._extract_date_from_filename(self.current_log_file.name)
             if file_date != current_date:
                 should_rotate = True
-                logger.info(f"Date changed, rotating log file")
+                logger.info("Date changed, rotating log file")
         
-        # 检查文件大小
+        # By size
         if self.current_log_file and self.current_log_file.exists():
             file_size = self.current_log_file.stat().st_size
             if file_size >= self.max_file_size_bytes:
@@ -231,46 +225,40 @@ class EventLogWriter:
             await self._cleanup_old_logs()
 
     async def _rotate_log_file(self):
-        """切割日志文件"""
-        # 关闭当前文件
+        """Rotate the log file"""
         if self.current_file_handle:
             self.current_file_handle.close()
             self.current_file_handle = None
         
-        # 打开新文件
         await self._open_new_log_file()
 
     async def _open_new_log_file(self):
-        """打开新的日志文件"""
-        # 生成日志文件名: events.YYYY-MM-DD.log 或 events.YYYY-MM-DD-HH-MM-SS.log
+        """Open a new log file"""
         current_date = datetime.now().strftime("%Y-%m-%d")
         base_filename = f"events.{current_date}.log"
         log_file_path = self.logs_path / base_filename
         
-        # 如果文件已存在且大小接近限制，添加时间戳
+        # If file already exists and is close to size limit, append timestamp
         if log_file_path.exists():
             file_size = log_file_path.stat().st_size
-            if file_size >= self.max_file_size_bytes * 0.9:  # 90% of limit
+            if file_size >= self.max_file_size_bytes * 0.9:
                 timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
                 base_filename = f"events.{timestamp}.log"
                 log_file_path = self.logs_path / base_filename
         
-        # 打开文件（追加模式）
         self.current_log_file = log_file_path
         self.current_file_handle = open(log_file_path, "a", encoding="utf-8")
         
         logger.info(f"Opened log file: {log_file_path}")
 
     async def _cleanup_old_logs(self):
-        """清理旧的日志文件"""
+        """Clean up old log files"""
         try:
             cutoff_date = datetime.now() - timedelta(days=self.retention_days)
             
-            # 查找所有日志文件
             log_files = list(self.logs_path.glob("events.*.log"))
             
             for log_file in log_files:
-                # 从文件名提取日期
                 file_date_str = self._extract_date_from_filename(log_file.name)
                 if not file_date_str:
                     continue
@@ -278,7 +266,6 @@ class EventLogWriter:
                 try:
                     file_date = datetime.strptime(file_date_str, "%Y-%m-%d")
                     
-                    # 如果文件超过保留期限，删除它
                     if file_date < cutoff_date:
                         log_file.unlink()
                         logger.info(f"Deleted old log file: {log_file}")
@@ -290,28 +277,21 @@ class EventLogWriter:
             logger.error(f"Error cleaning up old logs: {e}", exc_info=True)
 
     def _extract_date_from_filename(self, filename: str) -> Optional[str]:
-        """从文件名提取日期
+        """Extract date string from filename
         
         Args:
-            filename: 文件名，如 "events.2025-11-26.log"
+            filename: Name like "events.2025-11-26.log"
         
         Returns:
-            日期字符串 "YYYY-MM-DD" 或 None
+            "YYYY-MM-DD" or None
         """
-        # 匹配 events.YYYY-MM-DD.log 或 events.YYYY-MM-DD-HH-MM-SS.log
         match = re.search(r'events\.(\d{4}-\d{2}-\d{2})', filename)
         if match:
             return match.group(1)
         return None
 
     def get_all_log_files(self) -> List[Path]:
-        """获取所有日志文件，按时间倒序排列
-        
-        Returns:
-            日志文件路径列表
-        """
+        """Get all log files sorted by modification time descending"""
         log_files = list(self.logs_path.glob("events.*.log"))
-        # 按修改时间倒序排序（最新的在前）
         log_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
         return log_files
-
