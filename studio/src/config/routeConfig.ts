@@ -17,6 +17,7 @@ import ReadmeMainPage from "@/pages/readme/ReadmeMainPage"
 import ModManagementPage from "@/pages/mod-management/ModManagementPage"
 // import McpMainPage from "@/pages/mcp/McpMainPage";
 import FeedMainPage from "@/pages/feed/FeedMainPage"
+import EventsMainPage from "@/pages/events/EventsMainPage"
 
 // Navigation icon components
 export const NavigationIcons = {
@@ -483,6 +484,21 @@ export const dynamicRouteConfig: RouteConfig[] = [
       key: PLUGIN_NAME_ENUM.MOD_MANAGEMENT,
       label: "Mod Management",
       icon: "ModManagement",
+      visible: true,
+      order: 6,
+      group: "secondary",
+    },
+  },
+  {
+    path: "/events/*",
+    element: EventsMainPage,
+    title: "Events",
+    requiresAuth: false,
+    requiresLayout: true,
+    navigationConfig: {
+      key: PLUGIN_NAME_ENUM.EVENTS,
+      label: "Events",
+      icon: "Events",
       visible: true,
       order: 6,
       group: "secondary",

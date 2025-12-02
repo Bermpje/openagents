@@ -120,3 +120,37 @@ export interface NetworkInfo {
   mods: string[];
   agent_count: number;
 }
+
+/**
+ * Type definitions for Event Explorer
+ */
+export interface EventDefinition {
+  eventName: string;
+  address: string;
+  type: 'operation' | 'response' | 'notification';
+  description: string;
+  mod: string;
+  sourceFile: string;
+  requestPayload?: SchemaDefinition;
+  responsePayload?: SchemaDefinition;
+  payload?: SchemaDefinition;
+  relatedEvents?: string[];
+  operationSummary?: string;
+}
+
+export interface SchemaDefinition {
+  type?: string;
+  properties?: Record<string, SchemaProperty>;
+  required?: string[];
+  items?: SchemaDefinition;
+  example?: any;
+}
+
+export interface SchemaProperty {
+  type?: string;
+  description?: string;
+  default?: any;
+  example?: any;
+  items?: SchemaDefinition;
+  enum?: any[];
+}
