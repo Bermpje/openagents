@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useOpenAgents } from "@/context/OpenAgentsProvider";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 
@@ -114,6 +114,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
         setRefreshInterval(null);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh, isAdmin, isAdminLoading]);
 
   // Manual refresh
@@ -159,7 +160,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
     const date = timestamp < 1e12 
       ? new Date(timestamp * 1000) 
       : new Date(timestamp);
-    return date.toLocaleString("zh-CN", {
+    return date.toLocaleString("en-US", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -198,7 +199,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
       <div className="p-6 dark:bg-gray-900 h-full flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">检查管理员权限...</p>
+          <p className="text-gray-600 dark:text-gray-400">Checking admin permissions...</p>
         </div>
       </div>
     );
@@ -224,10 +225,10 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
             </div>
             <div className="ml-3">
               <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                需要管理员权限
+                Admin Access Required
               </h3>
               <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
-                只有管理员组的成员才能查看事件日志。
+                Only members of the admin group can view event logs.
               </p>
             </div>
           </div>
@@ -242,10 +243,10 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div className="flex-1">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-            事件日志查看器
+            Event Log Viewer
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            实时查看网络中所有事件的日志记录
+            View real-time event logs from the network
           </p>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -258,7 +259,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
               className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
             />
             <span className="text-sm text-gray-700 dark:text-gray-300">
-              自动刷新 (5秒)
+              Auto-refresh (5s)
             </span>
           </label>
           
@@ -281,7 +282,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
-            刷新
+            Refresh
           </button>
           
           {/* Export button */}
@@ -303,7 +304,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
                 d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
             </svg>
-            导出 JSON
+            Export JSON
           </button>
         </div>
       </div>
@@ -311,19 +312,19 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
       {/* Filters */}
       <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
-          过滤器
+          Filters
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Time range */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              起始时间戳
+              Since Timestamp
             </label>
             <input
               type="number"
               value={sinceTimestamp || ""}
               onChange={(e) => setSinceTimestamp(e.target.value ? parseFloat(e.target.value) : null)}
-              placeholder="可选"
+              placeholder="Optional"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -331,13 +332,13 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
           {/* Event name pattern */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              事件名称模式
+              Event Name Pattern
             </label>
             <input
               type="text"
               value={eventNamePattern}
               onChange={(e) => setEventNamePattern(e.target.value)}
-              placeholder="例如: feed.*"
+              placeholder="e.g.: feed.*"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -345,13 +346,13 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
           {/* Source ID */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              来源 ID
+              Source ID
             </label>
             <input
               type="text"
               value={sourceId}
               onChange={(e) => setSourceId(e.target.value)}
-              placeholder="例如: agent_alice"
+              placeholder="e.g.: agent_alice"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -359,13 +360,13 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
           {/* Destination ID */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              目标 ID
+              Destination ID
             </label>
             <input
               type="text"
               value={destinationId}
               onChange={(e) => setDestinationId(e.target.value)}
-              placeholder="例如: mod:feed"
+              placeholder="e.g.: mod:feed"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -375,7 +376,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
           <div className="flex items-center gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                每页数量
+                Items Per Page
               </label>
               <input
                 type="number"
@@ -396,7 +397,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
             onClick={handleRefresh}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
           >
-            应用过滤器
+            Apply Filters
           </button>
         </div>
       </div>
@@ -420,7 +421,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
             </div>
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                加载失败
+                Load Failed
               </h3>
               <p className="mt-1 text-sm text-red-700 dark:text-red-300">
                 {error}
@@ -434,7 +435,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
       <div className="mb-6 grid grid-cols-3 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            当前显示
+            Currently Showing
           </div>
           <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             {events.length}
@@ -442,7 +443,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            总计
+            Total
           </div>
           <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             {totalCount}
@@ -450,7 +451,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            页码
+            Page
           </div>
           <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             {Math.floor(offset / limit) + 1}
@@ -463,7 +464,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
         {loading && events.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-400">加载事件日志...</p>
+            <p className="text-gray-600 dark:text-gray-400">Loading event logs...</p>
           </div>
         ) : events.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
@@ -481,7 +482,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
               />
             </svg>
             <p className="text-gray-600 dark:text-gray-400">
-              没有找到事件日志
+              No event logs found
             </p>
           </div>
         ) : (
@@ -567,18 +568,18 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
                       {/* Event Metadata */}
                       <div>
                         <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                          事件元数据
+                          Event Metadata
                         </h4>
                         <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 overflow-x-auto">
                           <div className="space-y-1 text-xs">
-                            <div><span className="font-medium">时间戳:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.timestamp}</span></div>
-                            <div><span className="font-medium">方向:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.direction}</span></div>
-                            <div><span className="font-medium">来源:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.source_id}</span></div>
-                            <div><span className="font-medium">目标:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.destination_id || "N/A"}</span></div>
-                            <div><span className="font-medium">可见性:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.visibility}</span></div>
-                            <div><span className="font-medium">请求 ID:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.request_id}</span></div>
+                            <div><span className="font-medium">Timestamp:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.timestamp}</span></div>
+                            <div><span className="font-medium">Direction:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.direction}</span></div>
+                            <div><span className="font-medium">Source:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.source_id}</span></div>
+                            <div><span className="font-medium">Destination:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.destination_id || "N/A"}</span></div>
+                            <div><span className="font-medium">Visibility:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.visibility}</span></div>
+                            <div><span className="font-medium">Request ID:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.request_id}</span></div>
                             {event.response_to && (
-                              <div><span className="font-medium">响应于:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.response_to}</span></div>
+                              <div><span className="font-medium">Response To:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{event.response_to}</span></div>
                             )}
                           </div>
                         </div>
@@ -587,7 +588,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
                       {/* Payload */}
                       <div>
                         <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                          事件载荷
+                          Event Payload
                         </h4>
                         <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 overflow-x-auto">
                           <pre className="text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
@@ -608,7 +609,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
       {(totalCount > limit || offset > 0) && (
         <div className="mt-6 flex items-center justify-between">
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            显示 {offset + 1} - {Math.min(offset + events.length, totalCount)} / {totalCount} 条记录
+            Showing {offset + 1} - {Math.min(offset + events.length, totalCount)} of {totalCount} records
           </div>
           <div className="flex gap-2">
             <button
@@ -616,14 +617,14 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
               disabled={offset === 0}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              上一页
+              Previous
             </button>
             <button
               onClick={handleNextPage}
               disabled={!hasMore}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              下一页
+              Next
             </button>
           </div>
         </div>

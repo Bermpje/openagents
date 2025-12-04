@@ -13,6 +13,7 @@ import EventLogs from "./EventLogs";
 import EventDebugger from "./EventDebugger";
 import ModManagementPage from "../mod-management/ModManagementPage";
 import EventsMainPage from "../events/EventsMainPage";
+import EventLogViewer from "../events/components/EventLogViewer";
 
 /**
  * Profile main page - handles all profile-related features
@@ -62,6 +63,9 @@ const ProfileMainPage: React.FC = () => {
       
       {/* Event Logs subpage */}
       <Route path="event-logs" element={<EventLogs />} />
+      
+      {/* Event Log Viewer subpage - Admin only */}
+      <Route path="event-log-viewer" element={<EventLogViewer />} />
       
       {/* Event Debugger subpage */}
       <Route path="event-debugger" element={<EventDebugger />} />
