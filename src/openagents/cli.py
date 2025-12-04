@@ -4,7 +4,11 @@ OpenAgents CLI
 
 A beautiful command-line interface for OpenAgents multi-agent framework.
 """
+import sys
+import asyncio
 
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 import sys
 import logging
 import yaml
@@ -2181,6 +2185,8 @@ def agent_start(
             if 'agent' in locals():
                 agent.stop()
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             progress.update(task, description=f"[red]❌ Failed to start agent: {e}")
             console.print(f"[red]Error: {e}[/red]")
             if 'agent' in locals():
@@ -2374,7 +2380,7 @@ def agents_start(
                 finally:
                     # Stop all agents
                     console.print("[blue]🔄 Stopping all agents...[/blue]")
-                    stop_results = bulk_manager.stop_all_agents()
+                    stop_results = await bulk_manager.stop_all_agents_async()
                     
                     stopped_count = sum(1 for success in stop_results.values() if success)
                     console.print(f"[green]✅ Stopped {stopped_count} agents[/green]")
@@ -2389,9 +2395,14 @@ def agents_start(
                 try:
                     # Import and run the monitor UI
                     from openagents.ui.agent_monitor import run_agent_monitor
+                    import threading
                     
-                    # Run the monitor (this blocks until user quits)
-                    run_agent_monitor(bulk_manager)
+                    # Run UI in a separate thread to avoid event loop conflicts
+                    ui_thread = threading.Thread(target=run_agent_monitor, args=(bulk_manager,), daemon=False)
+                    ui_thread.start()
+                    
+                    # Wait for UI thread to complete
+                    ui_thread.join()
                     
                 except ImportError as e:
                     console.print(f"[red]❌ UI not available: {e}[/red]")
@@ -2414,7 +2425,7 @@ def agents_start(
                 finally:
                     # Clean shutdown
                     console.print("[blue]🔄 Stopping all agents...[/blue]")
-                    stop_results = bulk_manager.stop_all_agents()
+                    stop_results = await bulk_manager.stop_all_agents_async()
                     
                     stopped_count = sum(1 for success in stop_results.values() if success)
                     console.print(f"[green]✅ Stopped {stopped_count} agents[/green]")
@@ -2430,7 +2441,10 @@ def agents_start(
     
     # Run the async function
     try:
-        asyncio.run(start_agents_async())
+        # asyncio.run(start_agents_async())
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(start_agents_async())
     except KeyboardInterrupt:
         console.print("\n[yellow]👋 Goodbye![/yellow]")
     except Exception as e:

@@ -4,7 +4,9 @@ OpenAgents Terminal Console
 
 A simple terminal console for interacting with an OpenAgents network.
 """
-
+# import asyncio, sys
+# if sys.platform == "win32":
+#     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 import asyncio
 import logging
 import uuid

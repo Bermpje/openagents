@@ -5,7 +5,9 @@ Bulk Agent Manager for OpenAgents
 This module provides utilities for discovering, starting, and managing multiple agents
 from a directory of YAML configuration files.
 """
-
+import sys, asyncio
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 import asyncio
 import logging
 import yaml
@@ -20,6 +22,7 @@ from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
+from datetime import datetime
 
 from openagents.agents.runner import AgentRunner
 
@@ -43,16 +46,21 @@ class AgentInstance:
     """A running agent instance."""
     info: AgentInfo
     runner: Optional[AgentRunner] = None
-    process: Optional[subprocess.Popen] = None
+    process: Optional[subprocess.Popen] = None  # Legacy sync process (deprecated)
+    async_process: Optional[asyncio.subprocess.Process] = None  # Async subprocess for log capture
     status: str = "stopped"  # stopped, starting, running, error, stopping
     error_message: Optional[str] = None
     start_time: Optional[float] = None
-    log_buffer: List[str] = None
+    log_buffer: List[str] = None  # Buffer for captured logs (max 1000 lines)
+    log_queue: Optional[asyncio.Queue] = None  # Queue for real-time log streaming
     pid: Optional[int] = None
+    exit_code: Optional[int] = None  # Process exit code when stopped
     
     def __post_init__(self):
         if self.log_buffer is None:
             self.log_buffer = []
+        if self.log_queue is None:
+            self.log_queue = asyncio.Queue()
 
 
 class BulkAgentManager:
@@ -65,6 +73,8 @@ class BulkAgentManager:
         self._executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="AgentRunner")
         self._setup_grpc_environment()
         self._setup_error_filtering()
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         
     def _setup_grpc_environment(self):
         """Configure gRPC environment to prevent BlockingIOError."""
@@ -393,8 +403,12 @@ class BulkAgentManager:
             
             elif agent_instance.info.file_type == "python":
                 # Python agent: direct execution
-                cmd = [sys.executable, str(agent_instance.info.config_path)]
-            
+                # cmd = [sys.executable, str(agent_instance.info.config_path)]
+                # cmd = [sys.executable, str(agent_instance.info.config_path.resolve())]
+                # cmd = [sys.executable, "-u", str(agent_instance.info.config_path)]
+                cmd = [sys.executable, "-u", str(agent_instance.info.config_path.resolve())]
+                print("=== CMD:", cmd, "===")
+
             else:
                 raise ValueError(f"Unsupported file type: {agent_instance.info.file_type}")
             
@@ -407,28 +421,37 @@ class BulkAgentManager:
                     env["OPENAGENTS_NETWORK_ID"] = connection_settings["network_id"]
             
             # Set working directory to the agent file's directory
-            cwd = agent_instance.info.config_path.parent
+            # cwd = agent_instance.info.config_path.parent
+            # cwd = str(agent_instance.info.config_path.parent.resolve())
+
             
-            # Start subprocess
+            # Start async subprocess for better log capture
             logger.info(f"Starting {agent_instance.info.file_type} agent '{agent_id}' with command: {' '.join(cmd)}")
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True,
-                cwd=cwd,
+            # async_process = await asyncio.create_subprocess_exec(
+            #     *cmd,
+            #     stdout=asyncio.subprocess.PIPE,
+            #     stderr=asyncio.subprocess.PIPE,
+            #     cwd=cwd,
+            #     env=env
+            # )
+
+            async_process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 env=env
             )
-            
-            agent_instance.process = process
-            agent_instance.pid = process.pid
+
+            agent_instance.async_process = async_process
+            agent_instance.pid = async_process.pid
             agent_instance.status = "running"
             
-            logger.info(f"Agent '{agent_id}' started successfully with PID {process.pid}")
+            logger.info(f"Agent '{agent_id}' started successfully with PID {async_process.pid}")
             
-            # Start log monitoring in background
+            # Start log capture in background
+            asyncio.create_task(self._capture_logs(agent_instance))
+            
+            # Start process monitoring in background
             asyncio.create_task(self._monitor_process_logs(agent_instance))
             
             return True
@@ -436,36 +459,134 @@ class BulkAgentManager:
         except Exception as e:
             agent_instance.status = "error" 
             agent_instance.error_message = str(e)
-            logger.error(f"Failed to start agent '{agent_id}': {e}")
+            logger.error(f"Failed to start agent '{agent_id}': {e}", exc_info=True)
             return False
     
-    async def _monitor_process_logs(self, agent_instance: AgentInstance) -> None:
-        """Monitor subprocess logs and update log buffer."""
-        if not agent_instance.process:
+    async def _capture_logs(self, agent_instance: AgentInstance) -> None:
+        """Capture stdout and stderr from async subprocess in parallel.
+        
+        Reads logs asynchronously, adds timestamps, and pushes to both
+        log_queue (for real-time UI streaming) and log_buffer (for history).
+        Automatically trims log_buffer to max 1000 lines.
+        
+        Args:
+            agent_instance: Agent instance with async_process to capture from
+        """
+        if not agent_instance.async_process:
             return
         
+        agent_id = agent_instance.info.agent_id
+        logger.debug(f"Starting log capture for agent '{agent_id}'")
+        
+        async def read_stream(stream, stream_name: str):
+            """Read from a single stream (stdout or stderr) and process logs."""
+            try:
+                while True:
+                    line_bytes = await stream.readline()
+                    if not line_bytes:
+                        # Stream closed
+                        break
+                    
+                    # Decode and strip newline
+                    line = line_bytes.decode('utf-8', errors='replace').rstrip()
+                    
+                    # Add timestamp
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # Add [STDERR] prefix for stderr lines
+                    if stream_name == "stderr":
+                        formatted_line = f"[{timestamp}] [STDERR] {line}"
+                    else:
+                        formatted_line = f"[{timestamp}] {line}"
+                    
+                    # Push to log queue for real-time UI streaming (non-blocking)
+                    try:
+                        agent_instance.log_queue.put_nowait(formatted_line)
+                    except asyncio.QueueFull:
+                        # Drop oldest log if queue is full (shouldn't happen with unbounded queue)
+                        pass
+                    
+                    # Append to log buffer
+                    agent_instance.log_buffer.append(formatted_line)
+                    
+                    # Trim log buffer to max 1000 lines
+                    if len(agent_instance.log_buffer) > 1000:
+                        agent_instance.log_buffer = agent_instance.log_buffer[-1000:]
+                    
+            except Exception as e:
+                logger.debug(f"Log capture {stream_name} ended for agent '{agent_id}': {e}")
+            finally:
+                # Close stream to prevent resource leaks
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+        
         try:
-            # Simple process monitoring - just check if process is still alive
-            # Don't try to read logs in real-time as it can cause blocking issues
-            while agent_instance.process and agent_instance.process.poll() is None:
-                # Check if process is still running
-                await asyncio.sleep(2.0)  # Check every 2 seconds
+            # Read stdout and stderr in parallel
+            await asyncio.gather(
+                read_stream(agent_instance.async_process.stdout, "stdout"),
+                read_stream(agent_instance.async_process.stderr, "stderr"),
+                return_exceptions=True
+            )
+            logger.debug(f"Log capture completed for agent '{agent_id}'")
+        except Exception as e:
+            logger.error(f"Error in log capture for agent '{agent_id}': {e}")
+        finally:
+            # Ensure streams are closed
+            try:
+                if agent_instance.async_process:
+                    if agent_instance.async_process.stdout:
+                        agent_instance.async_process.stdout.close()
+                    if agent_instance.async_process.stderr:
+                        agent_instance.async_process.stderr.close()
+            except Exception:
+                pass
+    
+    async def _monitor_process_logs(self, agent_instance: AgentInstance) -> None:
+        """Monitor subprocess status and track exit code."""
+        if not agent_instance.async_process:
+            return
+        
+        agent_id = agent_instance.info.agent_id
+        
+        try:
+            # Wait for process to complete
+            exit_code = await agent_instance.async_process.wait()
             
-            # Process has ended, check exit code
-            if agent_instance.process:
-                exit_code = agent_instance.process.returncode
-                if exit_code != 0:
-                    agent_instance.status = "error"
-                    agent_instance.error_message = f"Process exited with code {exit_code}"
-                    logger.error(f"Agent '{agent_instance.info.agent_id}' process exited with code {exit_code}")
-                else:
-                    agent_instance.status = "stopped"
-                    logger.info(f"Agent '{agent_instance.info.agent_id}' process ended normally")
+            # Store exit code
+            agent_instance.exit_code = exit_code
+            
+            # Update status based on exit code
+            if exit_code != 0:
+                agent_instance.status = "error"
+                agent_instance.error_message = f"Process exited with code {exit_code}"
+                logger.error(f"Agent '{agent_id}' process exited with code {exit_code}")
+                
+                # Add error message to log
+                error_msg = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ERROR] Process terminated with exit code {exit_code}"
+                agent_instance.log_buffer.append(error_msg)
+                try:
+                    agent_instance.log_queue.put_nowait(error_msg)
+                except asyncio.QueueFull:
+                    pass
+            else:
+                agent_instance.status = "stopped"
+                logger.info(f"Agent '{agent_id}' process ended normally")
+                
+                # Add stop message to log
+                stop_msg = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [INFO] Process stopped (exit code 0)"
+                agent_instance.log_buffer.append(stop_msg)
+                try:
+                    agent_instance.log_queue.put_nowait(stop_msg)
+                except asyncio.QueueFull:
+                    pass
         
         except Exception as e:
-            logger.error(f"Error monitoring process for agent '{agent_instance.info.agent_id}': {e}")
+            logger.error(f"Error monitoring process for agent '{agent_id}': {e}")
             agent_instance.status = "error"
             agent_instance.error_message = f"Process monitoring error: {e}"
+            agent_instance.exit_code = -1
     
     async def start_all_agents(
         self,
@@ -523,8 +644,8 @@ class BulkAgentManager:
         
         return success_map
     
-    def stop_agent(self, agent_id: str) -> bool:
-        """Stop a single agent subprocess.
+    async def stop_agent_async(self, agent_id: str) -> bool:
+        """Stop a single agent subprocess asynchronously (graceful shutdown).
         
         Args:
             agent_id: ID of the agent to stop
@@ -545,23 +666,33 @@ class BulkAgentManager:
         try:
             agent_instance.status = "stopping"
             
-            if agent_instance.process:
-                logger.info(f"Terminating agent '{agent_id}' with PID {agent_instance.process.pid}")
+            # Stop async process (preferred)
+            if agent_instance.async_process:
+                logger.info(f"Terminating agent '{agent_id}' with PID {agent_instance.async_process.pid}")
                 
-                # Try graceful termination first
-                agent_instance.process.terminate()
-                
-                # Wait for graceful termination
+                # Close pipes first to prevent resource warnings on Windows
                 try:
-                    agent_instance.process.wait(timeout=5)
-                    logger.info(f"Agent '{agent_id}' terminated gracefully")
-                except subprocess.TimeoutExpired:
-                    # Force kill if graceful termination fails
-                    logger.warning(f"Agent '{agent_id}' didn't terminate gracefully, force killing")
-                    agent_instance.process.kill()
-                    agent_instance.process.wait()
+                    if agent_instance.async_process.stdout:
+                        agent_instance.async_process.stdout.close()
+                    if agent_instance.async_process.stderr:
+                        agent_instance.async_process.stderr.close()
+                except Exception:
+                    pass  # Ignore errors closing pipes
                 
-                agent_instance.process = None
+                # Try graceful SIGTERM first
+                agent_instance.async_process.terminate()
+                
+                # Wait for graceful termination (5 seconds)
+                try:
+                    await asyncio.wait_for(agent_instance.async_process.wait(), timeout=5.0)
+                    logger.info(f"Agent '{agent_id}' terminated gracefully")
+                except asyncio.TimeoutError:
+                    # Force kill if graceful termination fails
+                    logger.warning(f"Agent '{agent_id}' didn't terminate gracefully, sending SIGKILL")
+                    agent_instance.async_process.kill()
+                    await agent_instance.async_process.wait()
+                
+                agent_instance.async_process = None
                 agent_instance.pid = None
             
             # Also stop runner if it exists (backward compatibility)
@@ -574,13 +705,45 @@ class BulkAgentManager:
             return True
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+
             logger.error(f"Error stopping agent '{agent_id}': {e}")
             agent_instance.status = "error"
             agent_instance.error_message = str(e)
             return False
     
-    def stop_all_agents(self) -> Dict[str, bool]:
-        """Stop all running agents.
+    def stop_agent(self, agent_id: str) -> bool:
+        """Stop a single agent subprocess (synchronous wrapper).
+        
+        Args:
+            agent_id: ID of the agent to stop
+            
+        Returns:
+            True if agent stopped successfully, False otherwise
+        """
+        # Try to get the current event loop
+        try:
+            loop = asyncio.get_running_loop()
+            # We're in an async context - cannot block, just create task
+            task = asyncio.create_task(self.stop_agent_async(agent_id))
+            # Return True immediately - actual stop is async
+            return True
+        except RuntimeError:
+            # Not in async context - safe to create new event loop
+            try:
+                # Try to get existing event loop
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                return loop.run_until_complete(self.stop_agent_async(agent_id))
+            except Exception as e:
+                logger.error(f"Error in stop_agent: {e}")
+                return False
+    
+    async def stop_all_agents_async(self) -> Dict[str, bool]:
+        """Stop all running agents asynchronously.
         
         Returns:
             Dictionary mapping agent_id to success status
@@ -588,11 +751,55 @@ class BulkAgentManager:
         self.running = False
         self._shutdown_event.set()
         
+        # Stop all agents concurrently
+        tasks = []
+        agent_ids = list(self.agents.keys())
+        
+        for agent_id in agent_ids:
+            task = self.stop_agent_async(agent_id)
+            tasks.append((agent_id, task))
+        
         results = {}
-        for agent_id in self.agents.keys():
-            results[agent_id] = self.stop_agent(agent_id)
+        if tasks:
+            # Wait for all stop operations to complete
+            stop_results = await asyncio.gather(*[t[1] for t in tasks], return_exceptions=True)
+            
+            for i, (agent_id, _) in enumerate(tasks):
+                if isinstance(stop_results[i], Exception):
+                    logger.error(f"Error stopping agent '{agent_id}': {stop_results[i]}")
+                    results[agent_id] = False
+                else:
+                    results[agent_id] = stop_results[i]
         
         return results
+    
+    def stop_all_agents(self) -> Dict[str, bool]:
+        """Stop all running agents (synchronous wrapper).
+        
+        Returns:
+            Dictionary mapping agent_id to success status
+        """
+        self.running = False
+        self._shutdown_event.set()
+        
+        # Try to use async version if possible
+        try:
+            loop = asyncio.get_running_loop()
+            # In async context - create task but can't wait for results
+            asyncio.create_task(self.stop_all_agents_async())
+            # Return optimistic results
+            return {agent_id: True for agent_id in self.agents.keys()}
+        except RuntimeError:
+            # Not in async context - safe to run async code
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                return loop.run_until_complete(self.stop_all_agents_async())
+            except Exception as e:
+                logger.error(f"Error in stop_all_agents: {e}")
+                return {agent_id: False for agent_id in self.agents.keys()}
     
     def get_agent_status(self, agent_id: str) -> Optional[Dict]:
         """Get status information for an agent.
@@ -618,7 +825,8 @@ class BulkAgentManager:
             "error_message": agent_instance.error_message,
             "start_time": agent_instance.start_time,
             "uptime": time.time() - agent_instance.start_time if agent_instance.start_time else None,
-            "pid": agent_instance.pid
+            "pid": agent_instance.pid,
+            "exit_code": agent_instance.exit_code  # Exit code when process stopped
         }
         
         return status
