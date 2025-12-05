@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { EventDefinition, SchemaDefinition } from "@/services/eventExplorerService";
+import { EventDefinition } from "@/services/eventExplorerService";
 import SchemaViewer from "./SchemaViewer";
 import CodeExample from "./CodeExample";
 

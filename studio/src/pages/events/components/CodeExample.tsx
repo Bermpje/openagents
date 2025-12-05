@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useCallback } from "react";
 import { SchemaDefinition } from "@/services/eventExplorerService";
 
 interface CodeExampleProps {
@@ -12,7 +12,7 @@ const CodeExample: React.FC<CodeExampleProps> = ({
   schema,
   language,
 }) => {
-  const generateExample = (
+  const generateExample = useCallback((
     schema: SchemaDefinition,
     language: string
   ): string => {
@@ -57,7 +57,7 @@ const CodeExample: React.FC<CodeExampleProps> = ({
     } else {
       return JSON.stringify(example, null, 2);
     }
-  };
+  }, []);
 
   const formatPythonExample = (obj: any): string => {
     const lines: string[] = [];
@@ -105,7 +105,7 @@ const CodeExample: React.FC<CodeExampleProps> = ({
 
   const code = useMemo(
     () => generateExample(schema, language),
-    [schema, language]
+    [schema, language, generateExample]
   );
 
   return (
