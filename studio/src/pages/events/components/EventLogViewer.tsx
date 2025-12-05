@@ -205,37 +205,37 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="p-6 dark:bg-gray-900 h-full">
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <svg
-                className="h-5 w-5 text-yellow-400"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                Admin Access Required
-              </h3>
-              <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
-                Only members of the admin group can view event logs.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // if (!isAdmin) {
+  //   return (
+  //     <div className="p-6 dark:bg-gray-900 h-full">
+  //       <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+  //         <div className="flex items-center">
+  //           <div className="flex-shrink-0">
+  //             <svg
+  //               className="h-5 w-5 text-yellow-400"
+  //               viewBox="0 0 20 20"
+  //               fill="currentColor"
+  //             >
+  //               <path
+  //                 fillRule="evenodd"
+  //                 d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+  //                 clipRule="evenodd"
+  //               />
+  //             </svg>
+  //           </div>
+  //           <div className="ml-3">
+  //             <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+  //               Admin Access Required
+  //             </h3>
+  //             <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
+  //               Only members of the admin group can view event logs.
+  //             </p>
+  //           </div>
+  //         </div>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   return (
     <div className="p-6 dark:bg-gray-900 h-full min-h-screen overflow-y-auto">
@@ -314,9 +314,9 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
           Filters
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="flex flex-wrap gap-4">
           {/* Time range */}
-          <div>
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Since Timestamp
             </label>
@@ -330,7 +330,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
           </div>
 
           {/* Event name pattern */}
-          <div>
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Event Name Pattern
             </label>
@@ -344,7 +344,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
           </div>
 
           {/* Source ID */}
-          <div>
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Source ID
             </label>
@@ -358,7 +358,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
           </div>
 
           {/* Destination ID */}
-          <div>
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Destination ID
             </label>
@@ -374,7 +374,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
         
         <div className="mt-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div>
+            <div className="min-w-[200px]">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Items Per Page
               </label>
@@ -388,7 +388,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
                 }}
                 min={1}
                 max={500}
-                className="w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -397,7 +397,7 @@ const EventLogViewer: React.FC<EventLogViewerProps> = ({ onExport }) => {
             onClick={handleRefresh}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
           >
-            Apply Filters
+            Apply
           </button>
         </div>
       </div>
