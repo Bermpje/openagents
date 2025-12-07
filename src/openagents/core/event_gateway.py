@@ -157,6 +157,13 @@ class EventGateway:
         """
         # Override the timestamp to the current time
         event.timestamp = int(time.time())
+        
+        # Log the inbound event if event logging is enabled
+        if self.event_log_writer:
+            from openagents.core.event_logging import EventLogEntry
+            log_entry = EventLogEntry.from_event(event, direction="inbound")
+            await self.event_log_writer.log_event(log_entry)
+        
         # Process the event through the pipeline
         response = None
         if event.event_name.startswith("system."):
