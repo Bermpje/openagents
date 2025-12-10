@@ -53,11 +53,67 @@ class HttpTransport(Transport):
         self.app.router.add_post("/api/unregister", self.unregister_agent)
         self.app.router.add_get("/api/poll", self.poll_messages)
         self.app.router.add_post("/api/send_event", self.send_message)
+<<<<<<< HEAD
         
+=======
+
+>>>>>>> b4aa4418d01afb3b8658e282104d1a8e135f2c9f
         # Network management endpoints (admin only)
         self.app.router.add_get("/api/network/export", self.export_network)
         self.app.router.add_post("/api/network/import/validate", self.validate_import)
         self.app.router.add_post("/api/network/import/apply", self.apply_import)
+<<<<<<< HEAD
+=======
+        # LLM Logs API endpoints
+        self.app.router.add_get("/api/agents/service/{agent_id}/llm-logs", self.get_llm_logs)
+        self.app.router.add_get("/api/agents/service/{agent_id}/llm-logs/{log_id}", self.get_llm_log_entry)
+
+        # Cache file upload/download endpoints
+        self.app.router.add_post("/api/cache/upload", self.cache_upload)
+        self.app.router.add_get("/api/cache/download/{cache_id}", self.cache_download)
+        self.app.router.add_get("/api/cache/info/{cache_id}", self.cache_info)
+        # Agent management endpoints
+        self.app.router.add_get("/api/agents/service", self.get_service_agents)
+        self.app.router.add_post("/api/agents/service/{agent_id}/start", self.start_service_agent)
+        self.app.router.add_post("/api/agents/service/{agent_id}/stop", self.stop_service_agent)
+        self.app.router.add_post("/api/agents/service/{agent_id}/restart", self.restart_service_agent)
+        self.app.router.add_get("/api/agents/service/{agent_id}/status", self.get_service_agent_status)
+        self.app.router.add_get("/api/agents/service/{agent_id}/logs/screen", self.get_service_agent_logs)
+        self.app.router.add_get("/api/agents/service/{agent_id}/source", self.get_service_agent_source)
+        self.app.router.add_put("/api/agents/service/{agent_id}/source", self.save_service_agent_source)
+        self.app.router.add_get("/api/agents/service/{agent_id}/env", self.get_service_agent_env)
+        self.app.router.add_put("/api/agents/service/{agent_id}/env", self.save_service_agent_env)
+
+        # Event Explorer API endpoints
+        self.app.router.add_get("/api/events/sync", self.sync_events)
+        self.app.router.add_get("/api/events", self.list_events)
+        self.app.router.add_get("/api/events/mods", self.list_mods)
+        self.app.router.add_get("/api/events/search", self.search_events)
+        self.app.router.add_get("/api/events/{event_name}", self.get_event_detail)
+
+        # MCP routes (if serve_mcp: true)
+        if self._serve_mcp:
+            self.app.router.add_post("/mcp", self._handle_mcp_post)
+            self.app.router.add_get("/mcp", self._handle_mcp_get)
+            self.app.router.add_delete("/mcp", self._handle_mcp_delete)
+            self.app.router.add_get("/mcp/tools", self._handle_mcp_tools_list)
+            logger.info("HTTP transport: MCP protocol enabled at /mcp")
+
+        # Studio routes (if serve_studio: true)
+        if self._serve_studio:
+            # Studio static files - catch-all for /studio paths
+            self.app.router.add_get("/studio", self._handle_studio_redirect)
+            self.app.router.add_get("/studio/{path:.*}", self._handle_studio_static)
+            # Also serve /static/* and root-level assets for React app compatibility
+            # (React builds reference /static/js/... not /studio/static/js/...)
+            self.app.router.add_get("/static/{path:.*}", self._handle_studio_root_static)
+            self.app.router.add_get("/favicon.ico", self._handle_studio_root_asset)
+            self.app.router.add_get("/manifest.json", self._handle_studio_root_asset)
+            self.app.router.add_get("/logo192.png", self._handle_studio_root_asset)
+            self.app.router.add_get("/logo512.png", self._handle_studio_root_asset)
+            self.app.router.add_get("/robots.txt", self._handle_studio_root_asset)
+            logger.info("HTTP transport: Studio frontend enabled at /studio")
+>>>>>>> b4aa4418d01afb3b8658e282104d1a8e135f2c9f
 
     @web.middleware
     async def cors_middleware(self, request, handler):
@@ -577,6 +633,319 @@ class HttpTransport(Transport):
                     status=403
                 )
             
+<<<<<<< HEAD
+=======
+            if not self.network_instance or not hasattr(self.network_instance, "agent_manager"):
+                return web.json_response(
+                    {"success": False, "error": "Agent manager not available"},
+                    status=503,
+                )
+            
+            agent_manager = self.network_instance.agent_manager
+            result = await agent_manager.restart_agent(agent_id)
+            
+            if result["success"]:
+                return web.json_response(result)
+            else:
+                return web.json_response(result, status=400)
+        
+        except Exception as e:
+            logger.error(f"Error restarting service agent: {e}")
+            return web.json_response(
+                {"success": False, "error": str(e)},
+                status=500,
+            )
+    
+    async def get_service_agent_status(self, request):
+        """Get status of a specific service agent."""
+        try:
+            agent_id = request.match_info.get("agent_id")
+            
+            if not agent_id:
+                return web.json_response(
+                    {"success": False, "error": "agent_id is required"},
+                    status=400,
+                )
+            
+            if not self.network_instance or not hasattr(self.network_instance, "agent_manager"):
+                return web.json_response(
+                    {"success": False, "error": "Agent manager not available"},
+                    status=503,
+                )
+            
+            agent_manager = self.network_instance.agent_manager
+            status = agent_manager.get_agent_status(agent_id)
+            
+            if status:
+                return web.json_response({
+                    "success": True,
+                    "status": status
+                })
+            else:
+                return web.json_response(
+                    {"success": False, "error": "Agent not found"},
+                    status=404,
+                )
+        
+        except Exception as e:
+            logger.error(f"Error getting service agent status: {e}")
+            return web.json_response(
+                {"success": False, "error": str(e)},
+                status=500,
+            )
+    
+    async def get_service_agent_logs(self, request):
+        """Get recent log lines for a specific service agent."""
+        try:
+            agent_id = request.match_info.get("agent_id")
+            lines = int(request.query.get("lines", "100"))
+            
+            if not agent_id:
+                return web.json_response(
+                    {"success": False, "error": "agent_id is required"},
+                    status=400,
+                )
+            
+            # Validate lines parameter
+            if lines < 1 or lines > 10000:
+                return web.json_response(
+                    {"success": False, "error": "lines must be between 1 and 10000"},
+                    status=400,
+                )
+            
+            if not self.network_instance or not hasattr(self.network_instance, "agent_manager"):
+                return web.json_response(
+                    {"success": False, "error": "Agent manager not available"},
+                    status=503,
+                )
+            
+            agent_manager = self.network_instance.agent_manager
+            log_lines = agent_manager.get_agent_logs(agent_id, lines)
+            
+            if log_lines is not None:
+                return web.json_response({
+                    "success": True,
+                    "logs": log_lines
+                })
+            else:
+                return web.json_response(
+                    {"success": False, "error": "Agent not found or no logs available"},
+                    status=404,
+                )
+        
+        except ValueError:
+            return web.json_response(
+                {"success": False, "error": "Invalid lines parameter"},
+                status=400,
+            )
+        except Exception as e:
+            logger.error(f"Error getting service agent logs: {e}")
+            return web.json_response(
+                {"success": False, "error": str(e)},
+                status=500,
+            )
+
+    async def get_service_agent_source(self, request):
+        """Get the source code of a service agent."""
+        try:
+            agent_id = request.match_info.get("agent_id")
+            if not agent_id:
+                return web.json_response(
+                    {"success": False, "error": "Agent ID required"},
+                    status=400,
+                )
+
+            if not self.network_instance or not hasattr(self.network_instance, "agent_manager"):
+                return web.json_response(
+                    {"success": False, "error": "Agent manager not available"},
+                    status=503,
+                )
+
+            agent_manager = self.network_instance.agent_manager
+            source_info = agent_manager.get_agent_source(agent_id)
+
+            if source_info:
+                return web.json_response({
+                    "success": True,
+                    "source": source_info
+                })
+            else:
+                return web.json_response(
+                    {"success": False, "error": "Agent not found or unable to read source"},
+                    status=404,
+                )
+
+        except Exception as e:
+            logger.error(f"Error getting service agent source: {e}")
+            return web.json_response(
+                {"success": False, "error": str(e)},
+                status=500,
+            )
+
+    async def save_service_agent_source(self, request):
+        """Save the source code of a service agent."""
+        try:
+            agent_id = request.match_info.get("agent_id")
+            if not agent_id:
+                return web.json_response(
+                    {"success": False, "error": "Agent ID required"},
+                    status=400,
+                )
+
+            if not self.network_instance or not hasattr(self.network_instance, "agent_manager"):
+                return web.json_response(
+                    {"success": False, "error": "Agent manager not available"},
+                    status=503,
+                )
+
+            # Parse request body
+            try:
+                data = await request.json()
+            except Exception:
+                return web.json_response(
+                    {"success": False, "error": "Invalid JSON body"},
+                    status=400,
+                )
+
+            content = data.get("content")
+            if content is None:
+                return web.json_response(
+                    {"success": False, "error": "Content field required"},
+                    status=400,
+                )
+
+            agent_manager = self.network_instance.agent_manager
+            result = agent_manager.save_agent_source(agent_id, content)
+
+            if result["success"]:
+                return web.json_response(result)
+            else:
+                return web.json_response(result, status=400)
+
+        except Exception as e:
+            logger.error(f"Error saving service agent source: {e}")
+            return web.json_response(
+                {"success": False, "error": str(e)},
+                status=500,
+            )
+
+    async def get_service_agent_env(self, request):
+        """Get environment variables for a service agent."""
+        try:
+            agent_id = request.match_info.get("agent_id")
+            if not agent_id:
+                return web.json_response(
+                    {"success": False, "error": "Agent ID required"},
+                    status=400,
+                )
+
+            if not self.network_instance or not hasattr(self.network_instance, "agent_manager"):
+                return web.json_response(
+                    {"success": False, "error": "Agent manager not available"},
+                    status=503,
+                )
+
+            agent_manager = self.network_instance.agent_manager
+            env_vars = agent_manager.get_agent_env_vars(agent_id)
+
+            if env_vars is None:
+                return web.json_response(
+                    {"success": False, "error": f"Agent '{agent_id}' not found"},
+                    status=404,
+                )
+
+            return web.json_response({
+                "success": True,
+                "env_vars": env_vars
+            })
+
+        except Exception as e:
+            logger.error(f"Error getting service agent env vars: {e}")
+            return web.json_response(
+                {"success": False, "error": str(e)},
+                status=500,
+            )
+
+    async def save_service_agent_env(self, request):
+        """Save environment variables for a service agent."""
+        try:
+            agent_id = request.match_info.get("agent_id")
+            if not agent_id:
+                return web.json_response(
+                    {"success": False, "error": "Agent ID required"},
+                    status=400,
+                )
+
+            if not self.network_instance or not hasattr(self.network_instance, "agent_manager"):
+                return web.json_response(
+                    {"success": False, "error": "Agent manager not available"},
+                    status=503,
+                )
+
+            # Parse request body
+            try:
+                data = await request.json()
+            except Exception:
+                return web.json_response(
+                    {"success": False, "error": "Invalid JSON body"},
+                    status=400,
+                )
+
+            env_vars = data.get("env_vars")
+            if env_vars is None:
+                return web.json_response(
+                    {"success": False, "error": "env_vars field required"},
+                    status=400,
+                )
+
+            if not isinstance(env_vars, dict):
+                return web.json_response(
+                    {"success": False, "error": "env_vars must be an object"},
+                    status=400,
+                )
+
+            agent_manager = self.network_instance.agent_manager
+            result = agent_manager.set_agent_env_vars(agent_id, env_vars)
+
+            if result["success"]:
+                return web.json_response(result)
+            else:
+                return web.json_response(result, status=400)
+
+        except Exception as e:
+            logger.error(f"Error saving service agent env vars: {e}")
+            return web.json_response(
+                {"success": False, "error": str(e)},
+                status=500,
+            )
+
+    async def sync_events(self, request):
+        """Handle event index sync from GitHub."""
+        try:
+            from openagents.utils.event_indexer import get_event_indexer
+            
+            indexer = get_event_indexer()
+            result = indexer.sync_from_github()
+            
+            return web.json_response({
+                "success": True,
+                "data": result
+            })
+        except Exception as e:
+            logger.error(f"Error syncing events: {e}")
+            return web.json_response(
+                {"success": False, "error_message": str(e)},
+                status=500
+            )
+
+    async def list_events(self, request):
+        """List all indexed events with optional filters."""
+        try:
+            from openagents.utils.event_indexer import get_event_indexer
+            
+            indexer = get_event_indexer()
+            
+>>>>>>> b4aa4418d01afb3b8658e282104d1a8e135f2c9f
             # Get query parameters
             include_passwords = request.query.get("include_password_hashes", "false").lower() == "true"
             include_sensitive = request.query.get("include_sensitive_config", "false").lower() == "true"
@@ -739,6 +1108,447 @@ class HttpTransport(Transport):
                 status=200  # Return 200 with error in body, not 500
             )
 
+<<<<<<< HEAD
+=======
+    # ========================================================================
+    # Studio Static File Handlers (enabled via serve_studio: true)
+    # ========================================================================
+
+    def _find_studio_build_dir(self) -> Optional[str]:
+        """Find the studio build directory from the installed package."""
+        try:
+            from importlib.resources import files
+            studio_resources = files("openagents").joinpath("studio", "build")
+            if studio_resources.is_dir():
+                try:
+                    index_file = studio_resources.joinpath("index.html")
+                    if index_file.is_file():
+                        return str(studio_resources)
+                except (AttributeError, TypeError):
+                    pass
+        except (ModuleNotFoundError, AttributeError, TypeError):
+            pass
+
+        # Try to find build directory in multiple locations
+        script_dir = os.path.dirname(os.path.abspath(__file__))  # core/transports
+        core_dir = os.path.dirname(script_dir)  # core
+        package_dir = os.path.dirname(core_dir)  # src/openagents
+        src_dir = os.path.dirname(package_dir)  # src
+        project_root = os.path.dirname(src_dir)  # actual project root
+
+        possible_paths = [
+            # In development: project_root/studio/build
+            os.path.join(project_root, "studio", "build"),
+            # In installed package (src/openagents/studio/build)
+            os.path.join(package_dir, "studio", "build"),
+            # Alternative: relative to src
+            os.path.join(src_dir, "studio", "build"),
+        ]
+
+        for path in possible_paths:
+            if path and os.path.exists(path) and os.path.isdir(path):
+                index_html = os.path.join(path, "index.html")
+                if os.path.exists(index_html):
+                    return path
+
+        return None
+
+    async def _handle_studio_redirect(self, request: web.Request) -> web.Response:
+        """Redirect /studio to /studio/ for proper relative path handling."""
+        return web.HTTPFound("/studio/")
+
+    async def _handle_studio_static(self, request: web.Request) -> web.Response:
+        """Handle Studio static file requests with SPA routing support."""
+        if not self._studio_build_dir:
+            return web.Response(
+                status=404,
+                text="Studio build directory not found. Run 'npm run build' in the studio directory.",
+            )
+
+        # Get the requested path
+        path = request.match_info.get("path", "")
+
+        # Handle empty path or just "/" - serve index.html
+        if not path or path == "/":
+            file_path = os.path.join(self._studio_build_dir, "index.html")
+        else:
+            # Remove leading slash and construct full path
+            path = path.lstrip("/")
+            file_path = os.path.join(self._studio_build_dir, path)
+
+        # Security check: ensure the resolved path is within the build directory
+        real_build_dir = os.path.realpath(self._studio_build_dir)
+        real_file_path = os.path.realpath(file_path)
+        if not real_file_path.startswith(real_build_dir):
+            return web.Response(status=403, text="Forbidden")
+
+        # Check if file exists
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            # Serve the actual file
+            content_type, _ = mimetypes.guess_type(file_path)
+            if content_type is None:
+                content_type = "application/octet-stream"
+
+            try:
+                with open(file_path, "rb") as f:
+                    content = f.read()
+
+                response = web.Response(body=content, content_type=content_type)
+                # Add cache headers for static assets
+                if any(path.startswith(prefix) for prefix in ["static/", "assets/"]):
+                    response.headers["Cache-Control"] = "public, max-age=31536000"
+                else:
+                    response.headers["Cache-Control"] = "no-cache"
+                return response
+            except IOError as e:
+                logger.error(f"HTTP Studio: Error reading file {file_path}: {e}")
+                return web.Response(status=500, text="Internal server error")
+        else:
+            # For SPA routing: serve index.html for non-existent paths
+            # This allows React Router to handle client-side routing
+            index_path = os.path.join(self._studio_build_dir, "index.html")
+            if os.path.exists(index_path):
+                try:
+                    with open(index_path, "rb") as f:
+                        content = f.read()
+                    return web.Response(
+                        body=content,
+                        content_type="text/html",
+                        headers={"Cache-Control": "no-cache"},
+                    )
+                except IOError as e:
+                    logger.error(f"HTTP Studio: Error reading index.html: {e}")
+                    return web.Response(status=500, text="Internal server error")
+            else:
+                return web.Response(status=404, text="Not found")
+
+    async def _handle_studio_root_static(self, request: web.Request) -> web.Response:
+        """Handle /static/* requests for React app assets."""
+        if not self._studio_build_dir:
+            return web.Response(status=404, text="Studio build not found")
+
+        path = request.match_info.get("path", "")
+        file_path = os.path.join(self._studio_build_dir, "static", path.lstrip("/"))
+
+        # Security check
+        real_build_dir = os.path.realpath(self._studio_build_dir)
+        real_file_path = os.path.realpath(file_path)
+        if not real_file_path.startswith(real_build_dir):
+            return web.Response(status=403, text="Forbidden")
+
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            content_type, _ = mimetypes.guess_type(file_path)
+            if content_type is None:
+                content_type = "application/octet-stream"
+            try:
+                with open(file_path, "rb") as f:
+                    content = f.read()
+                response = web.Response(body=content, content_type=content_type)
+                response.headers["Cache-Control"] = "public, max-age=31536000"
+                return response
+            except IOError as e:
+                logger.error(f"HTTP Studio: Error reading static file {file_path}: {e}")
+                return web.Response(status=500, text="Internal server error")
+        return web.Response(status=404, text="Not found")
+
+    async def _handle_studio_root_asset(self, request: web.Request) -> web.Response:
+        """Handle root-level asset requests (favicon.ico, manifest.json, etc.)."""
+        if not self._studio_build_dir:
+            return web.Response(status=404, text="Studio build not found")
+
+        # Get filename from request path
+        filename = request.path.lstrip("/")
+        file_path = os.path.join(self._studio_build_dir, filename)
+
+        # Security check
+        real_build_dir = os.path.realpath(self._studio_build_dir)
+        real_file_path = os.path.realpath(file_path)
+        if not real_file_path.startswith(real_build_dir):
+            return web.Response(status=403, text="Forbidden")
+
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            content_type, _ = mimetypes.guess_type(file_path)
+            if content_type is None:
+                content_type = "application/octet-stream"
+            try:
+                with open(file_path, "rb") as f:
+                    content = f.read()
+                return web.Response(body=content, content_type=content_type)
+            except IOError as e:
+                logger.error(f"HTTP Studio: Error reading asset {file_path}: {e}")
+                return web.Response(status=500, text="Internal server error")
+        return web.Response(status=404, text="Not found")
+
+    def _require_admin(self, request) -> bool:
+        """Check if request is from admin user.
+
+        TODO: Integrate with actual authentication/permission system.
+        For now, this is a placeholder that always returns True.
+        In production, this should:
+        1. Extract user credentials from request headers/cookies
+        2. Validate against user database
+        3. Check admin role/permissions
+
+        Args:
+            request: aiohttp request object
+         Returns:
+            bool: True if user is admin, False otherwise
+        """
+        # TODO: Implement actual admin check
+        # Example implementation:
+        # auth_header = request.headers.get('Authorization')
+        # if not auth_header:
+        #     return False
+        # user = validate_token(auth_header)
+        # return user.is_admin if user else False
+        logger.warning("Admin check not implemented - allowing all requests")
+        return True
+
+    async def export_network(self, request):
+        """Export network configuration (admin only)."""
+        try:
+            # Check admin permissions
+            if not self._require_admin(request):
+                return web.json_response(
+                    {"success": False, "error_message": "Admin access required"},
+                    status=403
+                )
+
+            # Get query parameters
+            include_passwords = request.query.get("include_password_hashes", "false").lower() == "true"
+            include_sensitive = request.query.get("include_sensitive_config", "false").lower() == "true"
+            notes = request.query.get("notes")
+
+            logger.info(f"Network export requested (passwords={include_passwords}, sensitive={include_sensitive})")
+
+            # Get network instance from event handler
+            # The network_instance is set when transport is bound to network
+            if not self.network_instance:
+                return web.json_response(
+                    {"success": False, "error_message": "Network instance not available"},
+                    status=500
+                )
+
+            # Export network
+            exporter = NetworkExporter(self.network_instance)
+            zip_buffer = exporter.export_to_zip(
+                include_password_hashes=include_passwords,
+                include_sensitive_config=include_sensitive,
+                notes=notes
+            )
+
+            # Generate filename
+            filename = f"{self.network_instance.network_name}_export.zip"
+
+            # Return as streaming response
+            return web.Response(
+                body=zip_buffer.getvalue(),
+                headers={
+                    'Content-Type': 'application/zip',
+                    'Content-Disposition': f'attachment; filename="{filename}"'
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Network export failed: {e}", exc_info=True)
+            return web.json_response(
+                {"success": False, "error_message": "Export failed"},
+                status=500
+            )
+
+    async def validate_import(self, request):
+        """Validate network import file (admin only)."""
+        try:
+            # Check admin permissions
+            if not self._require_admin(request):
+                return web.json_response(
+                    {"success": False, "error_message": "Admin access required"},
+                    status=403
+                )
+
+            logger.info("Import validation requested")
+
+            # Read multipart/form-data
+            reader = await request.multipart()
+            zip_data = None
+
+            async for field in reader:
+                if field.name == 'file':
+                    zip_data = await field.read()
+                    break
+
+            if not zip_data:
+                return web.json_response(
+                    {"success": False, "error_message": "No file provided"},
+                    status=400
+                )
+
+            # Validate import
+            zip_buffer = BytesIO(zip_data)
+            importer = NetworkImporter()
+            validation_result = importer.validate(zip_buffer)
+
+            # Return validation result
+            return web.json_response(validation_result.model_dump())
+
+        except Exception as e:
+            logger.error(f"Import validation failed: {e}", exc_info=True)
+            return web.json_response(
+                {
+                    "valid": False,
+                    "errors": ["Validation error occurred"],
+                    "warnings": []
+                },
+                status=200  # Return 200 with error in body, not 500
+            )
+
+    async def apply_import(self, request):
+        """Apply network import (admin only)."""
+        try:
+            # Check admin permissions
+            if not self._require_admin(request):
+                return web.json_response(
+                    {"success": False, "error_message": "Admin access required"},
+                    status=403
+                )
+
+            logger.info("Import apply requested")
+
+            if not self.network_instance:
+                return web.json_response(
+                    {
+                        "success": False,
+                        "message": "Network instance not available",
+                        "errors": ["Network not initialized"]
+                    },
+                    status=500
+                )
+
+            # Read multipart/form-data
+            reader = await request.multipart()
+            zip_data = None
+            mode = ImportMode.OVERWRITE  # Default
+            new_name = None
+
+            async for field in reader:
+                if field.name == 'file':
+                    zip_data = await field.read()
+                elif field.name == 'mode':
+                    mode_str = (await field.read()).decode('utf-8')
+                    try:
+                        mode = ImportMode(mode_str)
+                    except ValueError:
+                        logger.warning(f"Invalid import mode: {mode_str}, using OVERWRITE")
+                elif field.name == 'new_name':
+                    new_name = (await field.read()).decode('utf-8')
+
+            if not zip_data:
+                return web.json_response(
+                    {
+                        "success": False,
+                        "message": "No file provided",
+                        "errors": ["File is required"]
+                    },
+                    status=400
+                )
+
+            # Apply import
+            zip_buffer = BytesIO(zip_data)
+            importer = NetworkImporter(self.network_instance)
+            import_result = await importer.apply(
+                zip_buffer,
+                mode=mode,
+                network=self.network_instance,
+                new_name=new_name
+            )
+
+            # Return result
+            return web.json_response(import_result.model_dump())
+
+        except Exception as e:
+            logger.error(f"Import apply failed: {e}", exc_info=True)
+            return web.json_response(
+                {
+                    "success": False,
+                    "message": "Import failed",
+                    "errors": ["An error occurred during import"]
+                },
+                status=200  # Return 200 with error in body, not 500
+            )
+
+
+def _generate_event_examples(event: Dict[str, Any]) -> Dict[str, str]:
+    """Generate code examples for an event."""
+    event_name = event.get('event_name', '')
+    event_type = event.get('event_type', 'operation')
+    request_schema = event.get('request_schema', {})
+    
+    # Python example
+    python_example = f"""# Python example
+from openagents import Agent
+
+agent = Agent(agent_id="my_agent")
+response = await agent.send_event(
+    event_name="{event_name}",
+    destination_id="mod:openagents.mods.{event.get('mod_id', 'unknown')}",
+    payload={{
+        # Add your payload here based on the schema
+"""
+    
+    # Add payload fields from schema
+    if request_schema and 'properties' in request_schema:
+        for prop_name, prop_info in request_schema['properties'].items():
+            if isinstance(prop_info, dict):
+                prop_type = prop_info.get('type', 'string')
+                is_required = prop_info.get('required', False)
+                default = prop_info.get('default')
+                
+                if default is not None:
+                    python_example += f'        "{prop_name}": {repr(default)},  # {prop_type}\n'
+                elif is_required:
+                    python_example += f'        "{prop_name}": "value",  # {prop_type} (required)\n'
+                else:
+                    python_example += f'        # "{prop_name}": "value",  # {prop_type} (optional)\n'
+    
+    python_example += """    }
+)
+print(response)
+"""
+    
+    # JavaScript example
+    js_example = f"""// JavaScript example
+const response = await connector.sendEvent({{
+    event_name: "{event_name}",
+    destination_id: "mod:openagents.mods.{event.get('mod_id', 'unknown')}",
+    payload: {{
+        // Add your payload here based on the schema
+"""
+    
+    if request_schema and 'properties' in request_schema:
+        for prop_name, prop_info in request_schema['properties'].items():
+            if isinstance(prop_info, dict):
+                prop_type = prop_info.get('type', 'string')
+                is_required = prop_info.get('required', False)
+                default = prop_info.get('default')
+                
+                if default is not None:
+                    js_example += f'        {prop_name}: {repr(default)},  // {prop_type}\n'
+                elif is_required:
+                    js_example += f'        {prop_name}: "value",  // {prop_type} (required)\n'
+                else:
+                    js_example += f'        // {prop_name}: "value",  // {prop_type} (optional)\n'
+    
+    js_example += """    }
+});
+console.log(response);
+"""
+    
+    return {
+        "python": python_example,
+        "javascript": js_example,
+    }
+
+>>>>>>> b4aa4418d01afb3b8658e282104d1a8e135f2c9f
 
 # Convenience function for creating HTTP transport
 def create_http_transport(

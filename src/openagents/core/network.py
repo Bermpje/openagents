@@ -332,6 +332,15 @@ class AgentNetwork:
                 logger.error("Failed to initialize network topology")
                 return False
 
+            # Set network instance reference in HTTP transport for network management APIs
+            if hasattr(self.topology, 'transports'):
+                from openagents.models.transport import TransportType
+                if TransportType.HTTP in self.topology.transports:
+                    http_transport = self.topology.transports[TransportType.HTTP]
+                    if hasattr(http_transport, 'network_instance'):
+                        http_transport.network_instance = self
+                        logger.debug("Set network instance reference in HTTP transport")
+
             # Re-register message handlers after topology initialization
             self._register_internal_handlers()
 

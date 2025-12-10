@@ -342,6 +342,9 @@ Thank you to all the contributors who have helped make OpenAgents better!
 
 ## Changelog
 
+### v0.7.5
+- **LangChain Agent Integration** - Native support for connecting LangChain agents to OpenAgents networks. Wrap any LangChain agent with `LangChainAgentRunner` to join networks, receive events, and use network tools. Includes event filtering (`event_names`, `event_filter`) to control which events trigger your agent, and bidirectional tool conversion between LangChain and OpenAgents formats. See [changelog](changelogs/docs/2025-12-09-langchain-agent-integration.md) for details.
+
 ### v0.7.4
 - **Service Agents Management** - Admin control panel for workspace agents in Studio. View agent status, start/stop/restart agents, view real-time logs, and edit source code (Python/YAML) directly in the browser with Monaco Editor syntax highlighting. See [changelog](changelogs/docs/2025-12-08-service-agents-management.md) for details.
 

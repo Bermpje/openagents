@@ -114,9 +114,17 @@ class NetworkExporter:
         """Get network configuration with optional sanitization."""
         # Get base config
         if hasattr(self.network.config, 'model_dump'):
+<<<<<<< HEAD
             config_dict = self.network.config.model_dump(exclude_none=False)
         elif hasattr(self.network.config, 'dict'):
             config_dict = self.network.config.dict(exclude_none=False)
+=======
+            # Use mode='json' to ensure enums and other types are serialized properly
+            # exclude_none=True to avoid exporting None values which cause validation errors
+            config_dict = self.network.config.model_dump(mode='json', exclude_none=True)
+        elif hasattr(self.network.config, 'dict'):
+            config_dict = self.network.config.dict(exclude_none=True)
+>>>>>>> b4aa4418d01afb3b8658e282104d1a8e135f2c9f
         else:
             config_dict = {}
         
@@ -139,9 +147,17 @@ class NetworkExporter:
         
         profile = self.network.config.network_profile
         if hasattr(profile, 'model_dump'):
+<<<<<<< HEAD
             profile_dict = profile.model_dump(exclude_none=False)
         elif hasattr(profile, 'dict'):
             profile_dict = profile.dict(exclude_none=False)
+=======
+            # Use mode='json' to ensure enums and other types are serialized properly
+            # exclude_none=True to avoid exporting None values which cause validation errors
+            profile_dict = profile.model_dump(mode='json', exclude_none=True)
+        elif hasattr(profile, 'dict'):
+            profile_dict = profile.dict(exclude_none=True)
+>>>>>>> b4aa4418d01afb3b8658e282104d1a8e135f2c9f
         else:
             profile_dict = {}
         
@@ -157,9 +173,17 @@ class NetworkExporter:
         
         for mod_config in self.network.config.mods:
             if hasattr(mod_config, 'model_dump'):
+<<<<<<< HEAD
                 mod_dict = mod_config.model_dump(exclude_none=False)
             elif hasattr(mod_config, 'dict'):
                 mod_dict = mod_config.dict(exclude_none=False)
+=======
+                # Use mode='json' to ensure enums and other types are serialized properly
+                # exclude_none=True to avoid exporting None values which cause validation errors
+                mod_dict = mod_config.model_dump(mode='json', exclude_none=True)
+            elif hasattr(mod_config, 'dict'):
+                mod_dict = mod_config.dict(exclude_none=True)
+>>>>>>> b4aa4418d01afb3b8658e282104d1a8e135f2c9f
             else:
                 continue
             
@@ -179,6 +203,7 @@ class NetworkExporter:
         if 'agent_groups' in config and isinstance(config['agent_groups'], dict):
             for group_name, group_config in config['agent_groups'].items():
                 if isinstance(group_config, dict) and 'password_hash' in group_config:
+<<<<<<< HEAD
                     group_config['password_hash'] = None
         
         # Remove network-level password hash if exists
@@ -191,16 +216,53 @@ class NetworkExporter:
         sensitive_keys = [
             'secret', 'api_key', 'token', 'private_key', 'certificate',
             'credentials', 'auth_token', 'access_token', 'refresh_token'
+=======
+                    del group_config['password_hash']
+        
+        # Remove network-level password hash if exists
+        if 'password_hash' in config:
+            del config['password_hash']
+
+    def _strip_sensitive_fields(self, config: Dict[str, Any]):
+        """Remove sensitive configuration fields."""
+        # List of sensitive field names to strip (exact matches only to avoid false positives)
+        sensitive_keys = [
+            'agent_secret', 'api_key', 'token', 'private_key', 'certificate',
+            'credentials', 'auth_token', 'access_token', 'refresh_token',
+            'secret_key', 'encryption_key'
+>>>>>>> b4aa4418d01afb3b8658e282104d1a8e135f2c9f
         ]
         
         def strip_recursive(obj):
             if isinstance(obj, dict):
+<<<<<<< HEAD
                 for key in list(obj.keys()):
                     # Check if key name contains sensitive keywords
                     if any(sensitive in key.lower() for sensitive in sensitive_keys):
                         obj[key] = None
                     else:
                         strip_recursive(obj[key])
+=======
+                # Collect keys to delete
+                keys_to_delete = []
+                for key in obj.keys():
+                    # Check if key name matches sensitive keywords (exact or contains)
+                    key_lower = key.lower()
+                    # Exact match or ends with sensitive key
+                    if key_lower in sensitive_keys or any(
+                        key_lower.endswith('_' + sensitive) or key_lower.endswith(sensitive)
+                        for sensitive in sensitive_keys
+                    ):
+                        keys_to_delete.append(key)
+                
+                # Delete sensitive keys
+                for key in keys_to_delete:
+                    del obj[key]
+                
+                # Recurse into remaining values
+                for value in obj.values():
+                    strip_recursive(value)
+>>>>>>> b4aa4418d01afb3b8658e282104d1a8e135f2c9f
             elif isinstance(obj, list):
                 for item in obj:
                     strip_recursive(item)
