@@ -162,7 +162,6 @@ class SystemCommandProcessor:
         certificate = event.payload.get("certificate", None)
         force_reconnect = event.payload.get("force_reconnect", False)
         password_hash = event.payload.get("password_hash", None)
-        requested_group = event.payload.get("agent_group", None)
 
         return await self.network.register_agent(
             agent_id,
@@ -170,8 +169,7 @@ class SystemCommandProcessor:
             metadata,
             certificate,
             force_reconnect,
-            password_hash,
-            requested_group
+            password_hash
         )
 
     async def handle_unregister_agent(self, event: Event) -> EventResponse:
