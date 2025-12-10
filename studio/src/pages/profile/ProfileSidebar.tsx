@@ -122,6 +122,26 @@ const ProfileSidebar: React.FC = () => {
         </svg>
       ),
     },
+    {
+      id: "network-import-export",
+      label: "Import/Export",
+      path: "/profile/network-import-export",
+      icon: (
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+          />
+        </svg>
+      ),
+    },
   ];
 
   const adminNavItems = [
@@ -205,26 +225,6 @@ const ProfileSidebar: React.FC = () => {
         </svg>
       ),
     },
-    {
-      id: "network-import-export",
-      label: "Import/Export",
-      path: "/profile/network-import-export",
-      icon: (
-        <svg
-          className="w-5 h-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-          />
-        </svg>
-      ),
-    },
   ];
 
   return (
@@ -249,26 +249,29 @@ const ProfileSidebar: React.FC = () => {
         </div>
 
         {/* Profile Section */}
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              console.log('Navigating to:', item.path);
-              navigate(item.path, { replace: false });
-            }}
-            className={`w-full flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-              isActive(item.path)
-                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                : "text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-            }`}
-          >
-            {item.icon}
-            <span className="ml-3">{item.label}</span>
-          </button>
-        ))}
+        {navItems.map((item) => {
+          
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Navigating to:', item.path);
+                navigate(item.path, { replace: false });
+              }}
+              className={`w-full flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                isActive(item.path)
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+              }`}
+            >
+              {item.icon}
+              <span className="ml-3">{item.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Project Template Selection Dialog */}
