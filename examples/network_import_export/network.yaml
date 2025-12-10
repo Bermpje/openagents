@@ -1,0 +1,104 @@
+network:
+  name: "test_import_export_network"
+  mode: "centralized"
+  host: "127.0.0.1"
+  port: 8600
+  
+  # 网络描述
+  description: "测试用网络 - 用于验证导入导出功能"
+  
+  # 默认代理组
+  default_agent_group: "default"
+  
+  # 是否需要密码
+  requires_password: false
+  
+  # 代理组配置（测试密码导出）
+  agent_groups:
+    admin_group:
+      password_hash: "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
+      description: "管理员组"
+      metadata:
+        permissions: ["read", "write", "admin"]
+        max_agents: 10
+    
+    guest_group:
+      password_hash: "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
+      description: "访客组"
+      metadata:
+        permissions: ["read"]
+        max_agents: 100
+  
+  # 传输层配置
+  transports:
+    - type: "grpc"
+      config:
+        host: "0.0.0.0"
+        port: 8600
+        max_message_size: 104857600
+        enable_reflection: true
+    
+    - type: "http"
+      config:
+        host: "0.0.0.0"
+        port: 8700
+        cors_enabled: true
+        max_request_size: 52428800
+  
+  # 推荐传输方式
+  manifest_transport: "http"
+  recommended_transport: "grpc"
+  
+  # 最大连接数
+  max_connections: 1000
+  
+  # 模组配置（测试模组导出）
+  mods:
+    - name: "openagents.mods.workspace.default"
+      enabled: true
+      config:
+        default_channel: "general"
+        max_channels: 50
+        message_retention_days: 30
+    
+    - name: "openagents.mods.workspace.project"
+      enabled: true
+      config:
+        max_projects: 100
+        auto_cleanup: true
+        cleanup_interval_days: 7
+    
+    - name: "openagents.mods.workspace.shared_artifact"
+      enabled: false
+      config:
+        max_artifact_size: 10485760
+        storage_path: "./artifacts"
+  
+  # 禁用代理密钥验证（测试用）
+  disable_agent_secret_verification: false
+
+# 网络配置文件（可选）
+network_profile:
+  display_name: "测试网络"
+  description: "这是一个用于测试导入导出功能的网络"
+  tags: ["test", "import-export", "demo"]
+  version: "1.0.0"
+  
+  # 联系信息
+  contact:
+    admin: "admin@example.com"
+    support: "support@example.com"
+  
+  # 功能开关
+  features:
+    enable_logging: true
+    enable_monitoring: true
+    enable_auto_backup: false
+  
+  # 自定义元数据（测试敏感数据导出）
+  metadata:
+    api_key: "test-api-key-12345"
+    secret_token: "super-secret-token"
+    database_url: "postgresql://user:pass@localhost:5432/db"
+    public_info: "这是公开信息"
+

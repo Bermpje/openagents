@@ -31,6 +31,7 @@ from openagents.config.globals import (
     WORKSPACE_DEFAULT_MOD_NAME,
 )
 from openagents.core.base_mod import BaseMod
+from openagents.core.mod_registry import ModRegistry
 from openagents.models.event_response import EventResponse
 
 if TYPE_CHECKING:
@@ -48,7 +49,6 @@ from openagents.core.agent_identity import AgentIdentityManager
 from openagents.models.event import Event, EventNames, EventVisibility
 from openagents.core.event_gateway import EventGateway
 from openagents.core.secret_manager import SecretManager
-from openagents.models.network_context import NetworkContext
 
 logger = logging.getLogger(__name__)
 
@@ -81,13 +81,6 @@ class AgentNetwork:
             from openagents.core.workspace_manager import create_temporary_workspace
 
             self.workspace_manager = create_temporary_workspace()
-        
-        # Agent manager for service agent process management
-        self.agent_manager = None
-        if self.workspace_manager:
-            from openagents.core.agent_manager import AgentManager
-            
-            self.agent_manager = AgentManager(self.workspace_manager.workspace_path)
 
         # Create topology
         topology_mode = (
@@ -108,8 +101,8 @@ class AgentNetwork:
         self.mods: OrderedDict[str, BaseMod] = OrderedDict()
         self.mod_manifests: Dict[str, Any] = {}
 
-        # Track dynamically loaded mod IDs (vs statically configured)
-        self._dynamic_mod_ids: Set[str] = set()
+        # Dynamic mod registry
+        self.mod_registry = ModRegistry()
 
         # Agent identity management
         self.identity_manager = AgentIdentityManager()
@@ -119,9 +112,6 @@ class AgentNetwork:
 
         # Event gateway
         self.event_gateway = EventGateway(self)
-
-        # Set network context for MCP transport (must be after mods and event_gateway are initialized)
-        self.topology.network_context = self._create_network_context()
 
     @property
     def events(self) -> EventGateway:
@@ -135,44 +125,6 @@ class AgentNetwork:
             subscription = network.events.subscribe("agent1", ["project.*", "channel.message.*"])
         """
         return self.event_gateway
-
-    def _create_network_context(self) -> NetworkContext:
-        """Create a NetworkContext with shared data for components.
-
-        Returns:
-            NetworkContext: Context object with network data and callbacks
-        """
-        # Compute workspace path
-        workspace_path = self._compute_workspace_path()
-
-        # Create emit_event callback
-        async def emit_event(event: Event, enable_delivery: bool = True):
-            return await self.event_gateway.process_event(event, enable_delivery=enable_delivery)
-
-        return NetworkContext(
-            network_name=self.network_name,
-            workspace_path=workspace_path,
-            workspace_manager=self.workspace_manager,
-            config=self.config,
-            mods=self.mods,
-            emit_event=emit_event,
-        )
-
-    def _compute_workspace_path(self) -> Optional[str]:
-        """Compute the workspace path based on config_path or workspace_manager."""
-        if self.config_path:
-            return str(Path(self.config_path).parent)
-        elif self.workspace_manager:
-            return str(self.workspace_manager.workspace_path)
-        return None
-
-    def _update_network_context(self) -> None:
-        """Update the network context after config_path is set.
-
-        This is called after load() sets config_path to ensure workspace_path is correct.
-        """
-        if self.topology.network_context:
-            self.topology.network_context.workspace_path = self._compute_workspace_path()
 
     @staticmethod
     def create_from_config(
@@ -307,13 +259,11 @@ class AgentNetwork:
                         f"Configuration file {config_path} must contain a 'network' section"
                     )
 
-                # Extract network profile and external_access from root level if present
+                # Extract network profile from root level if present
                 network_config_dict = config_dict["network"]
                 if "network_profile" in config_dict:
                     network_config_dict["network_profile"] = config_dict["network_profile"]
-                if "external_access" in config_dict:
-                    network_config_dict["external_access"] = config_dict["external_access"]
-
+                
                 network_config = NetworkConfig(**network_config_dict)
                 logger.info(f"Loaded network configuration from {config_path}")
 
@@ -324,8 +274,6 @@ class AgentNetwork:
 
                 # Store the config file path for later use (e.g., saving updates)
                 network.config_path = str(config_path.resolve())
-                # Update network context now that config_path is set
-                network._update_network_context()
 
                 # Load metadata if specified in config
                 if "metadata" in config_dict:
@@ -384,18 +332,17 @@ class AgentNetwork:
                 logger.error("Failed to initialize network topology")
                 return False
 
+            # Set network instance reference in HTTP transport for network management APIs
+            if hasattr(self.topology, 'transports'):
+                from openagents.models.transport import TransportType
+                if TransportType.HTTP in self.topology.transports:
+                    http_transport = self.topology.transports[TransportType.HTTP]
+                    if hasattr(http_transport, 'network_instance'):
+                        http_transport.network_instance = self
+                        logger.debug("Set network instance reference in HTTP transport")
+
             # Re-register message handlers after topology initialization
             self._register_internal_handlers()
-            
-            # Set network instance reference for all transports (needed for AgentManager API)
-            for transport in self.topology.transports.values():
-                if hasattr(transport, 'network_instance'):
-                    transport.network_instance = self
-            
-            # Start agent manager if available
-            if self.agent_manager:
-                if not await self.agent_manager.start():
-                    logger.warning("Failed to start agent manager, but continuing network initialization")
 
             self.is_running = True
             self.start_time = time.time()
@@ -414,10 +361,6 @@ class AgentNetwork:
         """
         try:
             self.is_running = False
-            
-            # Stop agent manager if available
-            if self.agent_manager:
-                await self.agent_manager.stop()
 
             # Shutdown topology
             await self.topology.shutdown()
@@ -436,7 +379,6 @@ class AgentNetwork:
         certificate: str,
         force_reconnect: bool = False,
         password_hash: Optional[str] = None,
-        requested_group: Optional[str] = None,
     ) -> EventResponse:
         """Register an agent with the network.
 
@@ -447,7 +389,6 @@ class AgentNetwork:
             certificate: Agent certificate
             force_reconnect: Whether to force reconnect
             password_hash: Password hash for group authentication (direct parameter, not in metadata)
-            requested_group: Explicitly requested agent group (optional)
 
         Returns:
             bool: True if registration successful
@@ -480,11 +421,7 @@ class AgentNetwork:
                     message=f"Agent {agent_id} already registered with network",
                 )
 
-        success = await self.topology.register_agent(
-            agent_info,
-            password_hash=password_hash,
-            requested_group=requested_group
-        )
+        success = await self.topology.register_agent(agent_info, password_hash=password_hash)
 
         if success:
             # Generate and store authentication secret
@@ -510,14 +447,12 @@ class AgentNetwork:
             return EventResponse(
                 success=True,
                 message=f"Registered agent {agent_id} with network",
-                data={"secret": secret, "assigned_group": assigned_group},
+                data={"secret": secret},
             )
         else:
-            # Build specific error message based on the situation
+            # Check if rejection was due to password requirement
             error_message = f"Failed to register agent {agent_id} with network"
-            if requested_group:
-                error_message = f"Invalid credentials for group '{requested_group}'"
-            elif self.config.requires_password:
+            if self.config.requires_password:
                 error_message = "Password authentication required for network registration"
 
             logger.error(f"Failed to register agent {agent_id} with network")
@@ -595,7 +530,7 @@ class AgentNetwork:
                 groups[group_name] = []
             groups[group_name].append(agent_id)
 
-        # Build group config info (including has_password flag for UI)
+        # Build group config info
         group_config = []
         added_group_names = set()
         for group_name, group_cfg in self.config.agent_groups.items():
@@ -605,23 +540,18 @@ class AgentNetwork:
                 "description": group_cfg.description,
                 "agent_count": len(groups.get(group_name, [])),
                 "metadata": group_cfg.metadata,
-                "has_password": bool(group_cfg.password_hash),
             })
 
-        # Add default group info if it has agents or always include it for UI
+        # Add default group info if it has agents
         default_group_name = self.config.default_agent_group
         if default_group_name not in added_group_names:
             added_group_names.add(default_group_name)
             group_config.append({
                 "name": default_group_name,
-                "description": "Default group for agents without specific credentials",
+                "description": "Agents without valid credentials",
                 "agent_count": len(groups.get(default_group_name, [])),
                 "metadata": {},
-                "has_password": False,
             })
-
-        # Get README content (resolved from config or file)
-        readme_content = self.topology.network_context.get_readme() if self.topology.network_context else None
 
         # Include network_profile if available
         network_profile_data = None
@@ -672,12 +602,11 @@ class AgentNetwork:
             "manifest_transport": self.config.manifest_transport,
             "recommended_transport": self.config.recommended_transport,
             "max_connections": self.config.max_connections,
-            "readme": readme_content,
         }
-
+        
         if network_profile_data:
             stats["network_profile"] = network_profile_data
-
+        
         return stats
 
     async def process_external_event(self, event: Event) -> EventResponse:
@@ -815,9 +744,9 @@ class AgentNetwork:
         try:
             # Extract mod_id from mod_path (last segment)
             mod_id = mod_path.split(".")[-1]
-
-            # Check if already loaded (in self.mods by path)
-            if mod_path in self.mods:
+            
+            # Check if already loaded
+            if mod_id in self.mod_registry:
                 return EventResponse(
                     success=False,
                     message=f"Mod '{mod_id}' is already loaded"
@@ -865,12 +794,12 @@ class AgentNetwork:
             
             # Set loaded_at timestamp
             mod_instance.loaded_at = time.time()
-
+            
+            # Register in registry
+            self.mod_registry.register(mod_id, mod_instance)
+            
             # Add to network.mods so ModEventProcessor can process events through this mod
             self.mods[mod_path] = mod_instance
-
-            # Track as dynamically loaded
-            self._dynamic_mod_ids.add(mod_id)
             
             logger.info(f"✅ Successfully loaded mod: {mod_id} from {mod_path}")
             
@@ -899,24 +828,24 @@ class AgentNetwork:
         try:
             # Extract mod_id from mod_path
             mod_id = mod_path.split(".")[-1]
-
-            # Check if mod is dynamically loaded
-            if mod_id not in self._dynamic_mod_ids:
+            
+            # Get mod from registry
+            mod_instance = self.mod_registry.get(mod_id)
+            if not mod_instance:
                 return EventResponse(
                     success=False,
                     message=f"Mod '{mod_id}' is not loaded"
                 )
-
-            # Get mod instance from self.mods
-            mod_instance = self.mods.get(mod_path)
-            if mod_instance:
-                # Shutdown the mod
-                mod_instance.shutdown()
-                # Remove from network.mods
+            
+            # Shutdown the mod
+            mod_instance.shutdown()
+            
+            # Remove from network.mods
+            if mod_path in self.mods:
                 del self.mods[mod_path]
-
-            # Remove from dynamic tracking
-            self._dynamic_mod_ids.discard(mod_id)
+            
+            # Unregister from registry
+            self.mod_registry.unregister(mod_id)
             
             logger.info(f"✅ Successfully unloaded mod: {mod_id}")
             
@@ -940,16 +869,14 @@ class AgentNetwork:
             Dictionary mapping mod_id to mod information
         """
         result = {}
-        for mod_id in self._dynamic_mod_ids:
-            # Find mod instance in self.mods by matching mod_id
-            for mod_path, mod_instance in self.mods.items():
-                if mod_path.split(".")[-1] == mod_id:
-                    result[mod_id] = {
-                        "mod_id": mod_id,
-                        "mod_path": mod_instance._mod_name,
-                        "loaded_at": getattr(mod_instance, "loaded_at", None)
-                    }
-                    break
+        for mod_id in self.mod_registry.list_loaded():
+            mod_instance = self.mod_registry.get(mod_id)
+            if mod_instance:
+                result[mod_id] = {
+                    "mod_id": mod_id,
+                    "mod_path": mod_instance._mod_name,
+                    "loaded_at": getattr(mod_instance, "loaded_at", None)
+                }
         return result
 
     async def _handle_system_mod_load(self, event: Event) -> EventResponse:
@@ -990,6 +917,138 @@ class AgentNetwork:
             )
         
         return await self.unload_mod(mod_path)
+
+    async def restart(self, new_config: Optional[NetworkConfig] = None) -> bool:
+        """Gracefully restart the network without restarting the process.
+        
+        This performs an in-process restart by:
+        1. Shutting down current network gracefully
+        2. Applying new configuration (or reloading from file)
+        3. Reinitializing the network
+        
+        The FastAPI application or process is NOT restarted.
+        
+        Args:
+            new_config: Optional new NetworkConfig to apply. If None, reloads from existing config file.
+            
+        Returns:
+            bool: True if restart successful, False otherwise
+        """
+        logger.info("Starting network restart...")
+        
+        try:
+            # Step 1: Shutdown current network
+            logger.info("Shutting down current network...")
+            shutdown_success = await self.shutdown()
+            if not shutdown_success:
+                logger.error("Failed to shutdown network")
+                return False
+            
+            # Step 2: Apply new configuration
+            if new_config is not None:
+                logger.info(f"Applying new configuration: {new_config.name}")
+                self.config = new_config
+                self.network_name = new_config.name
+                
+                # Reload mods from new config
+                if new_config.mods:
+                    logger.info(f"Loading {len(new_config.mods)} mods from new config...")
+                    try:
+                        from openagents.utils.mod_loaders import load_network_mods
+                        
+                        # Convert ModConfig objects to dictionaries
+                        mod_configs = []
+                        for mod_config in new_config.mods:
+                            if hasattr(mod_config, "model_dump"):
+                                mod_configs.append(mod_config.model_dump())
+                            elif hasattr(mod_config, "dict"):
+                                mod_configs.append(mod_config.dict())
+                            else:
+                                mod_configs.append(mod_config)
+                        
+                        mods = load_network_mods(mod_configs)
+                        
+                        # Clear existing mods and register new ones
+                        self.mods.clear()
+                        for mod_name, mod_instance in mods.items():
+                            mod_instance.bind_network(self)
+                            self.mods[mod_name] = mod_instance
+                            logger.info(f"Registered mod: {mod_name}")
+                        
+                        logger.info(f"Successfully loaded {len(mods)} mods")
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to load mods: {e}")
+                        # Continue with restart even if mod loading fails
+                
+            else:
+                # Reload from existing config file
+                logger.info("Reloading configuration from file...")
+                reloaded_config = self._load_config_from_file()
+                if reloaded_config:
+                    self.config = reloaded_config
+                    self.network_name = reloaded_config.name
+                else:
+                    logger.warning("Could not reload config from file, using existing config")
+            
+            # Recreate topology if config changed
+            topology_mode = (
+                NetworkMode.DECENTRALIZED
+                if str(self.config.mode) == str(ConfigNetworkMode.DECENTRALIZED)
+                else NetworkMode.CENTRALIZED
+            )
+            self.topology = create_topology(topology_mode, self.network_id, self.config)
+            
+            # Step 3: Reinitialize the network
+            logger.info("Reinitializing network...")
+            init_success = await self.initialize()
+            if not init_success:
+                logger.error("Failed to initialize network")
+                return False
+            
+            logger.info(f"✅ Network restart completed successfully: {self.network_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Network restart failed: {e}", exc_info=True)
+            return False
+
+    def _load_config_from_file(self) -> Optional[NetworkConfig]:
+        """Load network configuration from existing config file.
+        
+        Returns:
+            NetworkConfig if successfully loaded, None otherwise
+        """
+        if not self.config_path:
+            logger.warning("No config_path available, cannot reload from file")
+            return None
+        
+        try:
+            config_file = Path(self.config_path)
+            if not config_file.exists():
+                logger.error(f"Config file not found: {config_file}")
+                return None
+            
+            logger.info(f"Loading config from: {config_file}")
+            
+            with open(config_file, 'r') as f:
+                config_dict = yaml.safe_load(f)
+            
+            if "network" not in config_dict:
+                logger.error("Config file missing 'network' section")
+                return None
+            
+            network_config_dict = config_dict["network"]
+            if "network_profile" in config_dict:
+                network_config_dict["network_profile"] = config_dict["network_profile"]
+            
+            network_config = NetworkConfig(**network_config_dict)
+            logger.info("Successfully loaded config from file")
+            return network_config
+            
+        except Exception as e:
+            logger.error(f"Failed to load config from file: {e}")
+            return None
 
 
 def create_network(config: Union[NetworkConfig, str, Path]) -> AgentNetwork:

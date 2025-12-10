@@ -2,7 +2,6 @@
 HTTP Transport Implementation for OpenAgents.
 
 This module provides the HTTP transport implementation for agent communication.
-Optionally serves MCP protocol at /mcp and Studio frontend at /studio.
 """
 
 import asyncio
@@ -24,6 +23,10 @@ from openagents.config.globals import (
     SYSTEM_EVENT_POLL_MESSAGES,
     SYSTEM_EVENT_UNREGISTER_AGENT,
 )
+from openagents.models.network_management import ImportMode
+from openagents.utils.network_export import NetworkExporter
+from openagents.utils.network_import import NetworkImporter
+from io import BytesIO
 from aiohttp import web
 
 # No need for external CORS library, implement manually
@@ -100,6 +103,11 @@ class HttpTransport(Transport):
         self.app.router.add_post("/api/unregister", self.unregister_agent)
         self.app.router.add_get("/api/poll", self.poll_messages)
         self.app.router.add_post("/api/send_event", self.send_message)
+
+        # Network management endpoints (admin only)
+        self.app.router.add_get("/api/network/export", self.export_network)
+        self.app.router.add_post("/api/network/import/validate", self.validate_import)
+        self.app.router.add_post("/api/network/import/apply", self.apply_import)
         # LLM Logs API endpoints
         self.app.router.add_get("/api/agents/service/{agent_id}/llm-logs", self.get_llm_logs)
         self.app.router.add_get("/api/agents/service/{agent_id}/llm-logs/{log_id}", self.get_llm_log_entry)
@@ -2220,6 +2228,203 @@ class HttpTransport(Transport):
                 logger.error(f"HTTP Studio: Error reading asset {file_path}: {e}")
                 return web.Response(status=500, text="Internal server error")
         return web.Response(status=404, text="Not found")
+
+    def _require_admin(self, request) -> bool:
+        """Check if request is from admin user.
+
+        TODO: Integrate with actual authentication/permission system.
+        For now, this is a placeholder that always returns True.
+        In production, this should:
+        1. Extract user credentials from request headers/cookies
+        2. Validate against user database
+        3. Check admin role/permissions
+
+        Args:
+            request: aiohttp request object
+         Returns:
+            bool: True if user is admin, False otherwise
+        """
+        # TODO: Implement actual admin check
+        # Example implementation:
+        # auth_header = request.headers.get('Authorization')
+        # if not auth_header:
+        #     return False
+        # user = validate_token(auth_header)
+        # return user.is_admin if user else False
+        logger.warning("Admin check not implemented - allowing all requests")
+        return True
+
+    async def export_network(self, request):
+        """Export network configuration (admin only)."""
+        try:
+            # Check admin permissions
+            if not self._require_admin(request):
+                return web.json_response(
+                    {"success": False, "error_message": "Admin access required"},
+                    status=403
+                )
+
+            # Get query parameters
+            include_passwords = request.query.get("include_password_hashes", "false").lower() == "true"
+            include_sensitive = request.query.get("include_sensitive_config", "false").lower() == "true"
+            notes = request.query.get("notes")
+
+            logger.info(f"Network export requested (passwords={include_passwords}, sensitive={include_sensitive})")
+
+            # Get network instance from event handler
+            # The network_instance is set when transport is bound to network
+            if not self.network_instance:
+                return web.json_response(
+                    {"success": False, "error_message": "Network instance not available"},
+                    status=500
+                )
+
+            # Export network
+            exporter = NetworkExporter(self.network_instance)
+            zip_buffer = exporter.export_to_zip(
+                include_password_hashes=include_passwords,
+                include_sensitive_config=include_sensitive,
+                notes=notes
+            )
+
+            # Generate filename
+            filename = f"{self.network_instance.network_name}_export.zip"
+
+            # Return as streaming response
+            return web.Response(
+                body=zip_buffer.getvalue(),
+                headers={
+                    'Content-Type': 'application/zip',
+                    'Content-Disposition': f'attachment; filename="{filename}"'
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Network export failed: {e}", exc_info=True)
+            return web.json_response(
+                {"success": False, "error_message": "Export failed"},
+                status=500
+            )
+
+    async def validate_import(self, request):
+        """Validate network import file (admin only)."""
+        try:
+            # Check admin permissions
+            if not self._require_admin(request):
+                return web.json_response(
+                    {"success": False, "error_message": "Admin access required"},
+                    status=403
+                )
+
+            logger.info("Import validation requested")
+
+            # Read multipart/form-data
+            reader = await request.multipart()
+            zip_data = None
+
+            async for field in reader:
+                if field.name == 'file':
+                    zip_data = await field.read()
+                    break
+
+            if not zip_data:
+                return web.json_response(
+                    {"success": False, "error_message": "No file provided"},
+                    status=400
+                )
+
+            # Validate import
+            zip_buffer = BytesIO(zip_data)
+            importer = NetworkImporter()
+            validation_result = importer.validate(zip_buffer)
+
+            # Return validation result
+            return web.json_response(validation_result.model_dump())
+
+        except Exception as e:
+            logger.error(f"Import validation failed: {e}", exc_info=True)
+            return web.json_response(
+                {
+                    "valid": False,
+                    "errors": ["Validation error occurred"],
+                    "warnings": []
+                },
+                status=200  # Return 200 with error in body, not 500
+            )
+
+    async def apply_import(self, request):
+        """Apply network import (admin only)."""
+        try:
+            # Check admin permissions
+            if not self._require_admin(request):
+                return web.json_response(
+                    {"success": False, "error_message": "Admin access required"},
+                    status=403
+                )
+
+            logger.info("Import apply requested")
+
+            if not self.network_instance:
+                return web.json_response(
+                    {
+                        "success": False,
+                        "message": "Network instance not available",
+                        "errors": ["Network not initialized"]
+                    },
+                    status=500
+                )
+
+            # Read multipart/form-data
+            reader = await request.multipart()
+            zip_data = None
+            mode = ImportMode.OVERWRITE  # Default
+            new_name = None
+
+            async for field in reader:
+                if field.name == 'file':
+                    zip_data = await field.read()
+                elif field.name == 'mode':
+                    mode_str = (await field.read()).decode('utf-8')
+                    try:
+                        mode = ImportMode(mode_str)
+                    except ValueError:
+                        logger.warning(f"Invalid import mode: {mode_str}, using OVERWRITE")
+                elif field.name == 'new_name':
+                    new_name = (await field.read()).decode('utf-8')
+
+            if not zip_data:
+                return web.json_response(
+                    {
+                        "success": False,
+                        "message": "No file provided",
+                        "errors": ["File is required"]
+                    },
+                    status=400
+                )
+
+            # Apply import
+            zip_buffer = BytesIO(zip_data)
+            importer = NetworkImporter(self.network_instance)
+            import_result = await importer.apply(
+                zip_buffer,
+                mode=mode,
+                network=self.network_instance,
+                new_name=new_name
+            )
+
+            # Return result
+            return web.json_response(import_result.model_dump())
+
+        except Exception as e:
+            logger.error(f"Import apply failed: {e}", exc_info=True)
+            return web.json_response(
+                {
+                    "success": False,
+                    "message": "Import failed",
+                    "errors": ["An error occurred during import"]
+                },
+                status=200  # Return 200 with error in body, not 500
+            )
 
 
 def _generate_event_examples(event: Dict[str, Any]) -> Dict[str, str]:
