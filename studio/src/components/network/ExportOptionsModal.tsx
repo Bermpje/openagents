@@ -58,7 +58,7 @@ const ExportOptionsModal: React.FC<ExportOptionsModalProps> = ({
           <div className="px-4 pt-5 pb-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                导出网络配置
+                Export Network Configuration
               </h3>
               {!isExporting && (
                 <button
@@ -100,10 +100,10 @@ const ExportOptionsModal: React.FC<ExportOptionsModalProps> = ({
                     htmlFor="include-password-hashes"
                     className="font-medium text-gray-700 dark:text-gray-300"
                   >
-                    包含密码哈希
+                    Include Password Hashes
                   </label>
                   <p className="text-gray-500 dark:text-gray-400">
-                    导出代理组密码哈希值（用于恢复完整配置）
+                    Export agent group password hashes (for restoring complete configuration)
                   </p>
                 </div>
               </div>
@@ -125,10 +125,10 @@ const ExportOptionsModal: React.FC<ExportOptionsModalProps> = ({
                     htmlFor="include-sensitive-config"
                     className="font-medium text-gray-700 dark:text-gray-300"
                   >
-                    包含敏感配置
+                    Include Sensitive Configuration
                   </label>
                   <p className="text-gray-500 dark:text-gray-400">
-                    导出 API 密钥、令牌等敏感信息
+                    Export sensitive information such as API keys and tokens
                   </p>
                 </div>
               </div>
@@ -139,7 +139,7 @@ const ExportOptionsModal: React.FC<ExportOptionsModalProps> = ({
                   htmlFor="export-notes"
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                 >
-                  备注（可选）
+                  Notes (Optional)
                 </label>
                 <textarea
                   id="export-notes"
@@ -147,7 +147,7 @@ const ExportOptionsModal: React.FC<ExportOptionsModalProps> = ({
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   disabled={isExporting}
-                  placeholder="添加关于此导出的说明..."
+                  placeholder="Add notes about this export..."
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
@@ -182,10 +182,10 @@ const ExportOptionsModal: React.FC<ExportOptionsModalProps> = ({
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  导出中...
+                  Exporting...
                 </>
               ) : (
-                "导出"
+                "Export"
               )}
             </button>
             <button
@@ -193,7 +193,7 @@ const ExportOptionsModal: React.FC<ExportOptionsModalProps> = ({
               disabled={isExporting}
               className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              取消
+              Cancel
             </button>
           </div>
         </div>

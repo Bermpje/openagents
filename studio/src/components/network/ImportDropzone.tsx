@@ -44,7 +44,7 @@ const ImportDropzone: React.FC<ImportDropzoneProps> = ({
       const zipFile = files.find((file) => file.name.endsWith(".zip"));
 
       if (!zipFile) {
-        setError("请上传 .zip 文件");
+        setError("Please upload a .zip file");
         return;
       }
 
@@ -61,7 +61,7 @@ const ImportDropzone: React.FC<ImportDropzoneProps> = ({
 
       const file = files[0];
       if (!file.name.endsWith(".zip")) {
-        setError("请上传 .zip 文件");
+        setError("Please upload a .zip file");
         return;
       }
 
@@ -117,11 +117,11 @@ const ImportDropzone: React.FC<ImportDropzoneProps> = ({
 
           <div>
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              拖拽文件到此处，或{" "}
-              <span className="text-blue-600 dark:text-blue-400">点击选择文件</span>
+              Drag and drop a file here, or{" "}
+              <span className="text-blue-600 dark:text-blue-400">click to select a file</span>
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              支持 .zip 格式的网络配置文件
+              Supports .zip format network configuration files
             </p>
           </div>
         </div>

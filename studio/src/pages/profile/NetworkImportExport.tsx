@@ -35,7 +35,7 @@ const NetworkImportExport: React.FC = () => {
       <div className="p-6 dark:bg-gray-900 h-full">
         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
           <p className="text-yellow-800 dark:text-yellow-200">
-            请先连接到网络
+            Please connect to a network first
           </p>
         </div>
       </div>
@@ -77,7 +77,7 @@ const NetworkImportExport: React.FC = () => {
     } catch (error) {
       console.error("Export failed:", error);
       setExportError(
-        error instanceof Error ? error.message : "导出失败，请重试"
+        error instanceof Error ? error.message : "Export failed, please try again"
       );
     } finally {
       setIsExporting(false);
@@ -103,7 +103,7 @@ const NetworkImportExport: React.FC = () => {
     } catch (error) {
       console.error("Validation failed:", error);
       setImportError(
-        error instanceof Error ? error.message : "验证失败，请重试"
+        error instanceof Error ? error.message : "Validation failed, please try again"
       );
     } finally {
       setIsValidating(false);
@@ -138,13 +138,13 @@ const NetworkImportExport: React.FC = () => {
         setImportError(
           result.errors.length > 0
             ? result.errors.join(", ")
-            : result.message || "导入失败"
+            : result.message || "Import failed"
         );
       }
     } catch (error) {
       console.error("Import failed:", error);
       setImportError(
-        error instanceof Error ? error.message : "导入失败，请重试"
+        error instanceof Error ? error.message : "Import failed, please try again"
       );
     } finally {
       setIsImporting(false);
@@ -156,10 +156,10 @@ const NetworkImportExport: React.FC = () => {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          网络导入/导出
+          Network Import/Export
         </h1>
         <p className="text-gray-600 dark:text-gray-400 mt-1">
-          备份、恢复或迁移网络配置
+          Backup, restore, or migrate network configuration
         </p>
       </div>
 
@@ -167,7 +167,7 @@ const NetworkImportExport: React.FC = () => {
       {exportSuccess && (
         <div className="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
           <p className="text-green-800 dark:text-green-200">
-            ✅ 网络配置导出成功
+            ✅ Network configuration exported successfully
           </p>
         </div>
       )}
@@ -181,7 +181,7 @@ const NetworkImportExport: React.FC = () => {
       {importSuccess && (
         <div className="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
           <p className="text-green-800 dark:text-green-200">
-            ✅ 网络配置导入成功，网络正在重启...
+            ✅ Network configuration imported successfully, network is restarting...
           </p>
         </div>
       )}
@@ -198,7 +198,7 @@ const NetworkImportExport: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              导出网络配置
+              Export Network Configuration
             </h2>
             <svg
               className="w-6 h-6 text-gray-400"
@@ -215,7 +215,7 @@ const NetworkImportExport: React.FC = () => {
             </svg>
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            将当前网络配置导出为 .zip 文件，包含网络配置、模块配置等信息。
+            Export the current network configuration as a .zip file, including network configuration, module configuration, and other information.
           </p>
           <button
             onClick={handleExportClick}
@@ -243,10 +243,10 @@ const NetworkImportExport: React.FC = () => {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />
                 </svg>
-                导出中...
+                Exporting...
               </>
             ) : (
-              "导出配置"
+              "Export Configuration"
             )}
           </button>
         </div>
@@ -255,7 +255,7 @@ const NetworkImportExport: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              导入网络配置
+              Import Network Configuration
             </h2>
             <svg
               className="w-6 h-6 text-gray-400"
@@ -272,7 +272,7 @@ const NetworkImportExport: React.FC = () => {
             </svg>
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            从 .zip 文件导入网络配置。导入后网络将自动重启以应用新配置。
+            Import network configuration from a .zip file. The network will automatically restart after import to apply the new configuration.
           </p>
           <ImportDropzone
             onFileSelected={handleFileSelected}
@@ -299,7 +299,7 @@ const NetworkImportExport: React.FC = () => {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 />
               </svg>
-              验证中...
+              Validating...
             </div>
           )}
         </div>
